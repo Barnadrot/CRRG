@@ -10,17 +10,17 @@ echo ""
 
 cd "$CRRG_ROOT"
 
-echo "[1/4] Building CRRG library..."
+echo "[1/5] Building CRRG library..."
 lake build CRRG
 echo "  OK"
 echo ""
 
-echo "[2/4] Building test suite..."
+echo "[2/5] Building test suite..."
 lake build Test
 echo "  OK"
 echo ""
 
-echo "[3/4] Declaration audit (verifying core types exist)..."
+echo "[3/5] Declaration audit (verifying core types exist)..."
 TMPFILE="${CRRG_ROOT}/.crrg_check_tmp_$$.lean"
 trap 'rm -f "$TMPFILE"' EXIT
 cat > "$TMPFILE" <<'LEAN'
@@ -40,13 +40,22 @@ import CRRG
 #check @CRRG.ResolvedCandidate
 #check @CRRG.PromotionQueue
 #check @CRRG.CandidateStatus
+#check @CRRG.MonotoneFamily
+#check @CRRG.Progress
+#check @CRRG.TaskStatus
+#check @CRRG.FrontierReport
+#check @CRRG.QueueReport
 LEAN
 lake env lean "$TMPFILE"
 echo "  All core declarations present."
 echo ""
 
-echo "[4/4] Transitive axiom audit (Spec 12.2)..."
+echo "[4/5] Transitive axiom audit (Spec 14.2 item 3)..."
 "$SCRIPT_DIR/crrg-audit"
+echo ""
+
+echo "[5/5] Banned-construct scan (Spec 14.2 item 2, 5.6, 14.2 item 7)..."
+"$SCRIPT_DIR/crrg-banned"
 echo ""
 
 echo "=== CRRG Check PASSED ==="

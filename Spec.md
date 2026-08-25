@@ -925,6 +925,10 @@ may be highly valuable. It proves that the research blueprint was missing a real
 
 ### 8.7 Certified graph vs typed promotion queue
 
+`CRRG.Report` renders the two separately and provides no operation that merges
+them: `QueueReport` and `FrontierReport` are unrelated types, and a
+`PromotionQueue` is not a `Frontier`, so a queue entry cannot close a root.
+
 The user-facing or agent-facing state should distinguish them visually and semantically:
 
 ```text
@@ -1218,6 +1222,35 @@ Do not add intermediate scores to its `TARGET` section.
 5. type-link each task theorem to the exact leaf declaration;
 6. print task identifiers with only `OPEN` / `CLOSED` / `INVALID` states;
 7. print no aggregate count or percentage.
+
+Items 2, 6 and 7 have concrete implementations rather than being left to
+reviewer discipline.
+
+**Item 2 — banned constructs.** `scripts/crrg-banned` scans Lean sources for
+escape hatches that keep a declaration axiom-clean while defeating the trust
+model: `sorry`, `native_decide` (trusts the compiler, not the kernel), `axiom`,
+`unsafe`, `partial`, and `@[implemented_by]` / `@[extern]` (which replace a
+verified definition at runtime). Lean comments are stripped before matching, so a
+doc-comment may quote this list without tripping the scan. This is complementary
+to the axiom audit, which catches only what reaches the kernel.
+
+**Items 6 and 7 — reporting.** `CRRG.Report` provides `TaskStatus` with exactly
+three constructors and `FrontierReport`, whose `render` emits **one line per
+task and nothing else**:
+
+```lean
+theorem FrontierReport.render_length (r : FrontierReport root) :
+    r.render.length = r.tasks.length
+```
+
+A summary line, a count, or a percentage would make the output longer than the
+task list, so surfacing one requires breaking this theorem. `FrontierReport` has
+no aggregate field to hold such a value, and `crrg-banned` additionally rejects
+identifiers such as `percentage`, `progressScore` and `completionRatio`.
+
+Task count remains available to the orchestrator as `FrontierReport.taskCount`,
+because iterating over tasks is legitimate. It is deliberately not part of
+`render`: §7.3 states that task count has no reward meaning.
 
 The orchestrator may use the individual status of the task it assigned as the reward signal.
 

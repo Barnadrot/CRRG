@@ -4,6 +4,7 @@ import Test.Synthetic.Universe
 import Test.Synthetic.Witness
 import Test.Synthetic.Refinement
 import Test.Synthetic.Monotone
+import Test.Synthetic.Report
 import Test.Synthetic.Split
 import Test.Synthetic.Guarded
 import Test.Synthetic.Escape

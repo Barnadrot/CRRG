@@ -187,6 +187,45 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-16` / `SPEC-08` — feat: banned-construct scan and no-aggregate reporting (§14.2 items 2, 6, 7; §5.6; §8.7)
+
+Three normative gate requirements had no implementation.
+
+**§14.2 item 2 — reject banned constructs.** `scripts/crrg-banned` scans Lean
+sources for escape hatches the axiom audit cannot see, because they keep a
+declaration axiom-clean while defeating the trust model: `sorry`,
+`native_decide`, `axiom`, `unsafe`, `partial`, `@[implemented_by]`, `@[extern]`.
+
+The first version used `grep` and immediately produced four false positives on
+`Report.lean`'s own doc-comments quoting the spec. Rewritten as
+`scripts/banned_scan.py`, which strips Lean comments (handling nested `/- -/`)
+before matching, so documentation may name a banned construct without tripping
+the scan. Verified against a fixture containing all seven classes — every one is
+caught — and against a fixture mentioning them only in comments, which passes.
+
+**§14.2 items 6 and 7, §5.6 — reporting without an aggregate.** `CRRG/Report.lean`
+adds `TaskStatus` (exactly three constructors, rendering to `OPEN` / `CLOSED` /
+`INVALID`) and `FrontierReport`, whose `render` emits one line per task and
+nothing else. The guarantee is a theorem:
+
+```lean
+theorem render_length (r : FrontierReport root) : r.render.length = r.tasks.length
+```
+
+A summary line, count, or percentage would make the output longer than the task
+list, so surfacing one requires breaking this theorem — and the test suite
+asserts it. `FrontierReport` also has no aggregate field to hold such a value,
+which is itself an asserted rejection.
+
+`taskCount` remains available for an orchestrator to iterate over, but is not
+part of `render`: §7.3 says task count has no reward meaning.
+
+**§8.7 — queue rendered separately.** `QueueReport` is an unrelated type to
+`FrontierReport`, and a `PromotionQueue` is not a `Frontier`, so a queue entry
+cannot contribute to root closure. Both facts are asserted rejections.
+
+Gate is now five steps; `crrg-check` runs the scan as step 5/5.
+
 #### `CHG-15` / `SPEC-07` — feat: monotone parameterized families (§10.2)
 
 §10.2 permits a *local numerical* reward for node families with a canonical
