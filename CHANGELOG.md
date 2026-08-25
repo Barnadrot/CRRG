@@ -187,6 +187,45 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-06` — test: replace the negative-test commentary with 11 asserted rejections
+
+`Test/Synthetic/NegativeTests.lean` previously contained **no negative tests**.
+It held positive tests plus comments asserting that bad constructions "would
+fail type-checking" — for example:
+
+```text
+-- The above compiles. A version with only onPass and no onFail
+-- would fail type-checking (cannot construct GuardedMap without onFail).
+```
+
+Nothing checked that claim. If CRRG had ever become lax enough to accept one of
+these, the suite would still have been green.
+
+Rewritten using `#expect_failure` (`CHG-05`) so each bad construction is an
+asserted rejection. Covers:
+
+| # | Rejected construction | Spec |
+|---|----------------------|------|
+| 1 | `Split` missing the odd branch | §5 4.3 |
+| 2 | `Split.discharge` supplied only some branches | §5 4.3 |
+| 3 | Weakened child discharging a stronger parent | §18 crit. 8 |
+| 4 | `Edge` used in the leafward direction | §6 5.1 |
+| 5 | `GuardedMap` without `onFail` | §5 4.4 |
+| 6 | `GuardedMap.onPass` applied outside the guard | §5 4.4 |
+| 7 | Escape branch dropped when closing the parent | §5 4.5 |
+| 8 | `WitnessSplit` classifier not total | §6 5.3 |
+| 9 | `Frontier` claiming a stronger root than its leaves support | §7 6.3 |
+| 10 | Promotion by a proof of a different proposition | §8 7.5 |
+| 11 | Sealing a candidate that is not in `DRAFT` | §8 7.4 |
+
+Each was then unwrapped and elaborated raw to confirm it fails for a genuine,
+on-point type error rather than vacuously — a syntax error would also satisfy
+`#expect_failure`. All eleven produce the expected error (missing cases, field
+missing, type mismatch on the exact proposition, and so on).
+
+Also corrects a stale comment in `Test/Synthetic/Split.lean` that referred to
+`Split.ofSplit`; the declaration is `Frontier.ofSplit`.
+
 #### `CHG-05` — test: add the `#expect_failure` negative-test harness
 
 Spec acceptance criterion 8 requires the gate to **reject** a deliberately

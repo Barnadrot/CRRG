@@ -34,5 +34,5 @@ private def singleSplit : Split ⟨True⟩ := Split.trivial ⟨True⟩
 
 example : Goal.Proved ⟨True⟩ := singleSplit.discharge fun () => trivial
 
--- Split.ofSplit creates a frontier
+-- Frontier.ofSplit creates a frontier from a split
 example : Frontier ⟨True⟩ := Frontier.ofSplit (Split.trivial ⟨True⟩)

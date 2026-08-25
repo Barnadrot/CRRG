@@ -1,21 +1,21 @@
 import CRRG
+import Test.Support.ExpectFailure
 
 /-!
 # Synthetic test: Negative tests
 
-Tests that CRRG correctly rejects invalid operations:
-- Missing branches in splits
-- Weakened child statements
-- Non-exhaustive classifiers cannot be constructed
+Spec acceptance criterion 8: the gate must **reject** a deliberately weakened
+child statement or a missing branch. Every test below asserts a rejection via
+`#expect_failure`; if CRRG ever became lax enough to accept one of these, the
+build breaks.
 -/
-
 
 open CRRG
 
--- A split must cover all cases. Here we verify the types enforce this:
--- you cannot build a Split that only covers some branches.
+/-! ## 1. A split must cover every case.
 
--- Correct: two-branch split covering Even and Odd properties
+The positive control: a two-branch split whose coverage proof exists. -/
+
 private inductive Parity | even | odd
 
 private def paritySplit : Split ⟨∀ (n : Nat), n = n⟩ where
@@ -27,45 +27,97 @@ private def paritySplit : Split ⟨∀ (n : Nat), n = n⟩ where
     if hmod : n % 2 = 0 then h .even n hmod
     else h .odd n hmod
 
--- Verify split works end-to-end
 example : Goal.Proved ⟨∀ (n : Nat), n = n⟩ :=
   paritySplit.discharge fun
     | .even => fun _ _ => rfl
     | .odd => fun _ _ => rfl
 
--- WitnessSplit must classify every parent witness.
--- The type `parent.Witness → (i : Branch) × (child i).Witness`
--- is total by construction. This test shows that the classifier
--- must handle all inputs.
+/- Negative: dropping the odd branch leaves `discharge` unprovable, because the
+single remaining child only speaks about even `n`. -/
+#expect_failure
+private def missingBranchSplit : Split ⟨∀ (n : Nat), n = n⟩ where
+  Branch := Unit
+  child _ := ⟨∀ (n : Nat), n % 2 = 0 → n = n⟩
+  discharge h n := h () n (by rfl)
 
-private def fullClassifier : WitnessSplit ⟨Bool⟩ where
-  Branch := Bool
-  child
-    | true => ⟨Unit⟩
-    | false => ⟨Unit⟩
-  classify
-    | true => ⟨true, ()⟩
-    | false => ⟨false, ()⟩
+/- Negative: a `Split` may not be closed by supplying only some branches. -/
+#expect_failure
+example : Goal.Proved ⟨∀ (n : Nat), n = n⟩ :=
+  paritySplit.discharge fun
+    | .even => fun _ _ => rfl
 
--- GuardedMap enforces both branches: we show that you need
--- both onPass and onFail to construct it.
+/-! ## 2. A weakened child may not discharge the parent. -/
+
+private def strongChild : Goal := ⟨∀ (n : Nat), n + 0 = n⟩
+private def weakChild : Goal := ⟨(0 : Nat) + 0 = 0⟩
+private def parentNeedsStrong : Goal := ⟨∀ (n : Nat), n + 0 = n⟩
+
+-- Positive: the exact child discharges the parent.
+private def honestEdge : Edge parentNeedsStrong strongChild := ⟨_root_.id⟩
+
+/- Negative: the weakened child (one instance instead of all `n`) does not. -/
+#expect_failure
+private def weakeningEdge : Edge parentNeedsStrong weakChild := ⟨fun h => h⟩
+
+/-! ## 3. Edge direction is rootward and cannot be reversed. -/
+
+private def correctDirection : Edge ⟨True⟩ ⟨1 = 1⟩ := ⟨fun _ => trivial⟩
+
+/- Negative: `Edge parent child` is `child.claim → parent.claim`, so a proof in
+the leafward direction is rejected. -/
+#expect_failure
+private def reversedDirection : Edge ⟨(1 : Nat) = 1⟩ ⟨True⟩ := ⟨fun _ => trivial⟩
+
+/-! ## 4. A guard must consume both truth values. -/
 
 private def guardBoth : GuardedMap ⟨Bool⟩ ⟨Unit⟩ ⟨Unit⟩ where
   guard b := b
   onPass _ _ := ()
   onFail _ _ := ()
 
--- The above compiles. A version with only onPass and no onFail
--- would fail type-checking (cannot construct GuardedMap without onFail).
--- This is enforced by Lean's type system, not a runtime check.
+/- Negative: omitting `onFail` is not a `GuardedMap`. The guard-failure branch
+cannot be dropped. -/
+#expect_failure
+private def guardMissingFail : GuardedMap ⟨Bool⟩ ⟨Unit⟩ ⟨Unit⟩ where
+  guard b := b
+  onPass _ _ := ()
 
--- Edge direction is enforced by types: Edge parent child means
--- child.claim → parent.claim, not the reverse.
+/- Negative: `onPass` may only use the witness under `guard w = true`; it may
+not be applied to a witness on the failing side. -/
+#expect_failure
+private def guardIgnoresGuard : GuardedMap ⟨Bool⟩ ⟨{ b : Bool // b = true }⟩ ⟨Unit⟩ where
+  guard b := b
+  onPass w _ := ⟨w, rfl⟩
+  onFail _ _ := ()
 
-private def correctDirection : Edge ⟨True⟩ ⟨1 = 1⟩ :=
-  ⟨fun _ => trivial⟩
+/-! ## 5. An escape branch cannot be silently dropped. -/
 
--- Frontier.closeRoot must actually use all leaves
+private abbrev escParent : BadNode := ⟨Bool⟩
+private abbrev escMain : BadNode := ⟨Unit⟩
+private abbrev escEscape : BadNode := ⟨Unit⟩
+
+private def escExample : EscapeMap escParent escMain escEscape where
+  classify
+    | true => Sum.inl ()
+    | false => Sum.inr ()
+
+/- Negative: closing the parent needs the escape branch too. -/
+#expect_failure
+example (hMain : escMain.Closed) : escParent.Closed :=
+  escExample.closed_parent hMain
+
+/-! ## 6. A classifier must be total over parent witnesses. -/
+
+/- Negative: a `WitnessSplit` classifier that handles only one constructor. -/
+#expect_failure
+private def partialClassifier : WitnessSplit ⟨Bool⟩ where
+  Branch := Bool
+  child _ := ⟨Unit⟩
+  classify
+    | true => ⟨true, ()⟩
+
+/-! ## 7. A frontier must actually use all of its leaves. -/
+
 private def twoLeafFrontier : Frontier ⟨True ∧ True⟩ where
   Task := Bool
   leaf
@@ -73,8 +125,37 @@ private def twoLeafFrontier : Frontier ⟨True ∧ True⟩ where
     | false => ⟨True⟩
   closeRoot h := ⟨h true, h false⟩
 
--- Must provide both leaves to close
 example : Goal.Proved ⟨True ∧ True⟩ :=
   twoLeafFrontier.closeRoot fun
     | true => trivial
     | false => trivial
+
+/- Negative: a frontier that claims a strictly stronger root than its leaves
+support cannot be built. -/
+#expect_failure
+private def dishonestFrontier : Frontier ⟨∀ (n : Nat), n < 5⟩ where
+  Task := Unit
+  leaf _ := ⟨(0 : Nat) < 5⟩
+  closeRoot h := fun _ => h ()
+
+/-! ## 8. A candidate may only be promoted by its exact sealed proposition. -/
+
+private def candA : CandidateEdge where
+  id := "N001"
+  targetProp := ∀ (n : Nat), n + 0 = n
+  status := .draft
+
+private def sealedA : SealedCandidate := candA.seal rfl
+
+-- Positive: the exact proof promotes.
+private def promotedA : CandidateEdge := sealedA.promote (fun _ => rfl)
+
+/- Negative: a proof of a *different*, weaker proposition does not promote the
+sealed candidate. This is the anti-proxy rule (Spec 7.5) at the type level. -/
+#expect_failure
+private def proxyPromotion : CandidateEdge := sealedA.promote (rfl : (0:Nat) + 0 = 0)
+
+/- Negative: sealing requires the candidate to actually be in DRAFT status. -/
+#expect_failure
+private def sealNonDraft : SealedCandidate :=
+  ({ id := "N002", targetProp := True, status := .certified } : CandidateEdge).seal rfl
