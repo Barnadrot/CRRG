@@ -187,6 +187,22 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-03` — fix: `trivial` resolved to `CRRG.Frontier.trivial` in the type-link helpers
+
+All three type-link helpers in `CRRG/Audit.lean` were defined as
+`... : True := trivial`. When Lean elaborates a declaration named
+`Frontier.rootIs`, it opens the `Frontier` namespace for the body — so `trivial`
+bound to `CRRG.Frontier.trivial : (root : Goal) → Frontier root`, not to
+`_root_.trivial : True`. Lean reported a type mismatch rather than an ambiguity,
+so the failure was not obvious from the source.
+
+This broke `Frontier.rootIs`, `Frontier.leafIs`, and
+`SealedCandidate.targetIs` — i.e. every mechanism the spec provides for
+type-linking a graph node to an exact project proposition (§14 items 12.2.4 and
+12.2.5). Replaced with the unambiguous `True.intro`.
+
+Third of four commits required to make the baseline build; still red.
+
 #### `CHG-02` — fix: make `BadNode.Closed` Mathlib-free; add missing `Split` import
 
 Two independent defects in `CRRG/Witness.lean`:
