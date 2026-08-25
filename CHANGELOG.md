@@ -187,6 +187,30 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `SPEC-03` — spec: mark §9 as downstream-only, resolving a direct contradiction with §2.1
+
+§2.1 states that CRRG **must never import** `Achievable`, Reed–Solomon-specific
+mathematics, or "any project-specific theorem vocabulary", and that if the
+generic package appears to need one of these, "the abstraction boundary is wrong
+and the concept belongs in a downstream adapter."
+
+§9 then specifies `ListViolation` in terms of `Word`, `KBField`, `targetCode`,
+`listAt`, `radius`, `Achievable`, `securityBits` and `Fintype` — every one of
+them forbidden — without saying which package it belongs to. Read literally, the
+spec required an implementer to violate its own hardest boundary rule, and it
+additionally requires Mathlib (`Finset`, `Fintype`) in a package §2.2 wants
+dependency-light.
+
+Retitled to "**downstream adapter only**" and prefixed with an explicit boundary
+warning stating that none of the section may be implemented inside the
+standalone CRRG package, that the generic machinery it builds on (`BadNode`,
+`WitnessSplit`, `EscapeMap`, `GuardedMap`) *is* CRRG's, and that finding
+`ListViolation` inside the CRRG package is a boundary violation to be moved out
+rather than blessed.
+
+No implementation change: CRRG correctly contains none of this today. The spec
+was the thing that was wrong.
+
 #### `SPEC-02` — spec: normalise the version and amend `BadNode.Closed` to be Mathlib-free
 
 **Version.** The document declared `v0.5` in its header while §18 was titled

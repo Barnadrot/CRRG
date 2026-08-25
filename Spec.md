@@ -842,9 +842,25 @@ This history is useful both for research provenance and for measuring whether CR
 
 ---
 
-## 9. LDB-specific counterexample vocabulary
+## 9. LDB-specific counterexample vocabulary — **downstream adapter only**
 
-After the proposition-level pilot works, introduce an explicit violation object aligned with the existing executable `listAt` API.
+> **Boundary warning.** Everything in this section is `proximity-research`
+> vocabulary: `Word`, `KBField`, `targetCode`, `listAt`, `radius`, `Achievable`,
+> `securityBits`. §2.1 states that CRRG "must never import" any of these, and
+> §2.2 requires the core to stay dependency-light. **None of this section may be
+> implemented inside the standalone CRRG package.** It specifies declarations
+> that belong to the downstream `ResearchGraph` adapter, alongside `Root971426`
+> and `Current`, and it is recorded here only because the counterexample
+> vocabulary is the long-term semantic model for the LDB program.
+>
+> The generic machinery this section builds on — `BadNode`, `WitnessMap`,
+> `WitnessSplit`, `EscapeMap`, `GuardedMap` — is in CRRG (§6.3–§6.5). The
+> LDB-specific instantiation below is not.
+>
+> If a future reader finds `ListViolation` inside the CRRG package, that is a
+> boundary violation and should be moved out, not blessed.
+
+After the proposition-level pilot works, the downstream adapter should introduce an explicit violation object aligned with the existing executable `listAt` API.
 
 ```lean
 structure ListViolation (d B : ℕ) where
@@ -854,7 +870,7 @@ structure ListViolation (d B : ℕ) where
   tooLarge : B < family.card
 ```
 
-Then prove an adapter of the form:
+Then prove an adapter theorem of the form (again, downstream):
 
 ```lean
 theorem achievable_of_no_listViolation
@@ -868,7 +884,7 @@ The proof should reuse the current finite-subfamily interpretation of `ListDecod
 
 Once this exists, the entire soundness program can be read as normalization of a hypothetical `ListViolation d B` into increasingly rigid counterexample types.
 
-That is the recommended long-term semantic model.
+That is the recommended long-term semantic model — for the downstream adapter. CRRG itself only supplies the generic `BadNode`/`WitnessSplit` calculus that this instantiates.
 
 ---
 
