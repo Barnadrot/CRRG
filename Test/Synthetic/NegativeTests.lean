@@ -138,24 +138,9 @@ private def dishonestFrontier : Frontier ⟨∀ (n : Nat), n < 5⟩ where
   leaf _ := ⟨(0 : Nat) < 5⟩
   closeRoot h := fun _ => h ()
 
-/-! ## 8. A candidate may only be promoted by its exact sealed proposition. -/
+/-! ## 8. Candidate lifecycle.
 
-private def candA : CandidateEdge where
-  id := "N001"
-  targetProp := ∀ (n : Nat), n + 0 = n
-  status := .draft
-
-private def sealedA : SealedCandidate := candA.seal rfl
-
--- Positive: the exact proof promotes.
-private def promotedA : CandidateEdge := sealedA.promote (fun _ => rfl)
-
-/- Negative: a proof of a *different*, weaker proposition does not promote the
-sealed candidate. This is the anti-proxy rule (Spec 7.5) at the type level. -/
-#expect_failure
-private def proxyPromotion : CandidateEdge := sealedA.promote (rfl : (0:Nat) + 0 = 0)
-
-/- Negative: sealing requires the candidate to actually be in DRAFT status. -/
-#expect_failure
-private def sealNonDraft : SealedCandidate :=
-  ({ id := "N002", targetProp := True, status := .certified } : CandidateEdge).seal rfl
+The candidate-layer rejections (proxy promotion, weakening a sealed target,
+refuting without a disproof, promoting a resolved candidate) live in
+`Test/Synthetic/CandidateSeal.lean`, next to the positive lifecycle tests they
+contrast with. -/

@@ -187,6 +187,48 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-14` / `SPEC-06` — feat: Lean-enforced candidate lifecycle
+
+Rewrites the candidate layer so that illegal transitions are untypeable rather
+than merely discouraged. The audit had found three concrete holes:
+
+1. `sealedUnverified` was **unreachable** — nothing in the API constructed a
+   candidate with that status, so `isPromotable` was dead code and the
+   lifecycle's central state did not exist;
+2. `SealedCandidate` carried no status, so `markRefuted` produced a value that
+   `promote` still accepted — a refuted candidate could be certified;
+3. the record was missing §8.3's `sourceIds`, `targetId` and
+   `expectedTheoremName`, and all of §8.8's history fields.
+
+The new encoding indexes the type by the sealed proposition and gives each
+lifecycle state its own type:
+
+- `SealRecord` — §8.3 identity plus §8.8 history (`sealHash`, `sourceCommit`,
+  `createdAt`);
+- `DraftCandidate` — target is a field, because a draft may still change;
+- `SealedCandidate P` — **target is a type parameter**, so §8.5 is structural:
+  weakening it is not a mutation but a type error;
+- `Outcome P` — the terminal states, with `certified` carrying a proof of `P`
+  and `refuted` carrying a disproof;
+- `ResolvedCandidate P` — seal plus outcome, retained forever (§8.8);
+- `PromotionQueue` — deliberately unrelated to `Frontier`, so a queue entry
+  cannot close a root (§8.7).
+
+`CandidateStatus` survives for rendering only; it is derived via `Outcome.status`
+and nothing accepts it as evidence. Three properties are now theorems rather
+than conventions: `status_isTerminal`, `status_not_promotable`, and
+`certified_sound` (a certified resolution really does yield a proof of the exact
+sealed proposition).
+
+**A claimed refutation must carry a disproof.** `refute` requires `¬ P`;
+"contradicted but not disproved" is `markInvalid`, which makes no claim about `P`.
+Conflating them would let an agent close a task by asserting falsity.
+
+Test coverage rewritten accordingly, with six new asserted rejections: proxy
+promotion, re-typing a sealed target, refuting without a disproof, promoting a
+resolved candidate, extracting a proof from a refuted one, and using a promotion
+queue entry to close a root.
+
 #### `CHG-13` — fix: `#expect_failure` silently passed on every `theorem`
 
 Found while writing the candidate lifecycle tests. A negative test written as a

@@ -760,19 +760,68 @@ Both are acceptable. What is forbidden is describing the edge as "H2 -> FpMoment
 
 A candidate edge should carry machine-readable metadata in addition to its exact proposition.
 
-Conceptually:
+The record is **not** a single mutable structure with a `status` field. Storing
+the target proposition and the status side by side as ordinary fields makes every
+illegal transition expressible, and CRRG's whole claim is that illegal
+transitions are not expressible. The normative encoding indexes the type by the
+sealed proposition and gives each lifecycle state its own type:
 
 ```lean
-structure CandidateEdge where
+/-- Provenance fixed at seal time, never mutated. -/
+structure SealRecord where
   id : String
   sourceIds : List String
   targetId : String
-  targetProp : Prop
   expectedTheoremName : String
-  status : CandidateStatus
+  sealHash : String        -- sha256 of the exact printed target type
+  sourceCommit : String
+  createdAt : String
+
+/-- DRAFT. Target is a field, because a draft may still change. -/
+structure DraftCandidate where
+  id : String
+  sourceIds : List String
+  targetId : String
+  expectedTheoremName : String
+  targetProp : Prop
+
+/-- SEALED_UNVERIFIED. Target is a *type parameter*: it can no longer change. -/
+structure SealedCandidate (targetProp : Prop) where
+  record : SealRecord
+
+/-- The terminal states. `certified` and `refuted` are kernel-checked. -/
+inductive Outcome (P : Prop)
+  | certified (proof : P) (theoremSha : String)
+  | refuted (disproof : ¬ P) (reason : String)
+  | invalid (reason : String)
+  | malformed (reason : String)
+  | superseded (bySealId : String) (reason : String)
+
+/-- History: the exact proposition, its provenance, and its final status. -/
+structure ResolvedCandidate (P : Prop) where
+  sealed : SealedCandidate P
+  outcome : Outcome P
 ```
 
-The exact implementation may avoid storing `Prop` in a runtime manifest and instead use Lean declarations plus a generated registry. The semantic requirements are:
+`CandidateStatus` still exists, but only for **rendering**. It is derived from
+the value's type via `Outcome.status`, never stored as mutable state, and
+nothing in CRRG accepts a `CandidateStatus` as evidence of anything.
+
+Three properties follow structurally rather than by convention:
+
+- **a sealed target cannot be weakened in place** — `SealedCandidate P` and
+  `SealedCandidate Q` are different types (§8.5);
+- **promotion requires the exact proposition** — `certified` carries a proof of
+  the very `P` the seal is indexed by;
+- **a resolved candidate cannot be promoted** — `Outcome` has no transition out
+  of it, and `Outcome.status_not_promotable` is a theorem.
+
+**A claimed refutation must carry a disproof.** `refuted` requires `¬ P`.
+"The intended route is contradicted, but I have no disproof" is `invalid`, which
+makes no claim about `P` at all. Conflating the two would let an agent close a
+task by asserting falsity.
+
+The semantic requirements the encoding must satisfy are:
 
 ```text
 candidate ID
@@ -817,6 +866,12 @@ Definitions:
 - **SUPERSEDED** — a different sealed candidate replaces it. The old exact target remains in history.
 
 A sealed target may never be weakened in place. If the target changes, create a new candidate ID and retain the old one.
+
+This is enforced by the type, not by review: the proposition is a parameter of
+`SealedCandidate`, so "changing it" produces a value of a different type rather
+than a mutation. The `sealHash` in the seal record covers the complementary
+attack of redefining the underlying Lean declaration while keeping its name — the
+kernel cannot see that, but the hash printed by `scripts/crrg-seal` does.
 
 ### 8.5 Anti-proxy rule for candidate promotion
 

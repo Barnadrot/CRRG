@@ -35,7 +35,11 @@ import CRRG
 #check @CRRG.EscapeMap
 #check @CRRG.Frontier
 #check @CRRG.SealedCandidate
-#check @CRRG.CandidateEdge
+#check @CRRG.DraftCandidate
+#check @CRRG.Outcome
+#check @CRRG.ResolvedCandidate
+#check @CRRG.PromotionQueue
+#check @CRRG.CandidateStatus
 LEAN
 lake env lean "$TMPFILE"
 echo "  All core declarations present."

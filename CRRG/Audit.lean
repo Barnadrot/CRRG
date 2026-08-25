@@ -20,9 +20,19 @@ def Frontier.rootIs {root : Goal} {P : Prop} (_front : Frontier root)
 def Frontier.leafIs {root : Goal} {P : Prop} (front : Frontier root)
     (t : front.Task) (_h : (front.leaf t).claim = P) : True := True.intro
 
-/-- Verify that a sealed candidate's target proposition is exactly `P`. -/
-def SealedCandidate.targetIs {P : Prop} (c : SealedCandidate)
-    (_h : c.targetProp = P) : True := True.intro
+/-- Verify that a sealed candidate's target proposition is exactly `Q`.
+
+    Since sealing moves the proposition into the type, `SealedCandidate P` already
+    pins it; this helper exists so a downstream pin file can assert the link to a
+    *named* project declaration in the same style as `rootIs` and `leafIs`. -/
+def SealedCandidate.targetIs {P Q : Prop} (_c : SealedCandidate P)
+    (_h : P = Q) : True := True.intro
+
+/-- Verify that a resolved candidate really is certified, and extract the proof
+    of its exact sealed proposition. A promotion that does not type-check here
+    is not a promotion. -/
+def ResolvedCandidate.certifiedProof {P : Prop} (r : ResolvedCandidate P)
+    (h : r.status = .certified) : P := r.certified_sound h
 
 /-- A frontier with all leaves closed yields the root. -/
 theorem Frontier.root_of_allClosed {root : Goal}
