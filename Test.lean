@@ -1,3 +1,4 @@
+import Test.Synthetic.ExpectFailureSelfTest
 import Test.Synthetic.Edge
 import Test.Synthetic.Universe
 import Test.Synthetic.Witness

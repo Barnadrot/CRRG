@@ -187,6 +187,30 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-13` — fix: `#expect_failure` silently passed on every `theorem`
+
+Found while writing the candidate lifecycle tests. A negative test written as a
+`theorem` passed **unconditionally**, whatever its proof.
+
+Cause: Lean 4.30 elaborates `theorem` bodies asynchronously. `elabCommand`
+returns before the proof is checked, so the harness observed an empty message
+log and concluded the command had been accepted — reporting a false pass for
+exactly the case a negative test most needs to catch. `def` and `example` are
+elaborated synchronously and were unaffected, which is why the gap survived the
+harness's original two-direction verification.
+
+Fixed by elaborating the wrapped command with `Elab.async := false`.
+
+Added `Test/Synthetic/ExpectFailureSelfTest.lean`, which pins the behaviour in
+both directions for `theorem`, `private theorem`, `example` and `def`, using the
+fact that `#expect_failure` nests (`#expect_failure #expect_failure <valid>`
+asserts that the harness rejects a valid command). It also re-checks that a
+rejected declaration does not survive in the environment.
+
+**No previously written negative test was affected** — all thirteen were `def`
+or `example` — but any future one written as a `theorem` would have been silently
+vacuous.
+
 #### `CHG-12` / `SPEC-05` — feat: universe-polymorphic index and witness types; pin `Edge : Prop`
 
 **Universes.** `BadNode.Witness`, `Split.Branch`, `WitnessSplit.Branch` and
