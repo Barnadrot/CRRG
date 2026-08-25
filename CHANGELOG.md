@@ -187,6 +187,42 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-12` / `SPEC-05` — feat: universe-polymorphic index and witness types; pin `Edge : Prop`
+
+**Universes.** `BadNode.Witness`, `Split.Branch`, `WitnessSplit.Branch` and
+`Frontier.Task` were all `Type 0`. A research counterexample is not guaranteed
+to live in the lowest universe — any witness that itself carries a type (a
+family, a code, a category-like structure) is at least `Type 1` — so a
+monomorphic calculus simply could not host it. All four are now `Type u`.
+
+Sibling nodes of one refinement share a universe (`GuardedMap`'s pass/fail,
+`EscapeMap`'s main/escape); a `WitnessMap` may cross universes, and
+`Frontier.splitLeaf` lands in `max u v`.
+
+`Test/Synthetic/Universe.lean` proves the polymorphism is real rather than
+vacuous: a `BadNode` whose witness is `(α : Type) × (α → α)`, a cross-universe
+`WitnessMap` from `Type 1` down to `Type 0`, a `Type 1`-indexed `Split` and
+`Frontier`, and a guarded refinement at `Type 1`.
+
+**The two `trivial` constructors are deliberately pinned to `Type 0`.** Making
+them polymorphic was tried first and is a usability trap: a convenience
+constructor whose universe nothing pins forces every downstream definition built
+from it to become polymorphic, and the level is then unsolvable at the use site
+(`Failed to infer universe levels in binder type`). Anyone needing a trivial node
+at a higher universe writes the two-line structure instance directly.
+
+Verified that ordinary `Type 0` usage needs no annotations anywhere: all 21
+pre-existing test jobs and the downstream integration fixture build unchanged.
+
+**`Edge : Prop`.** Lean inferred this from the single proof-valued field, but the
+inference was fragile — adding any data field later would silently move `Edge`
+into `Type` and change the universe of every downstream signature mentioning it.
+Now pinned explicitly, so that mistake becomes an immediate error. Certified
+edges carry no data by design; metadata belongs on the candidate record (§8.3).
+
+Spec §6.1–§6.3 and §7.3 amended to match, with a new normative
+"Universe discipline" paragraph.
+
 #### `SPEC-04` — spec: describe the built repository layout and make refinement normative
 
 **§2.2 layout.** Updated to the actual tree: `Edge` lives in `Basic.lean` beside

@@ -392,7 +392,7 @@ structure Goal where
 abbrev Goal.Proved (G : Goal) : Prop := G.claim
 
 /-- `child` is sufficient to discharge `parent`. -/
-structure Edge (parent child : Goal) where
+structure Edge (parent child : Goal) : Prop where
   discharge : child.claim → parent.claim
 
 namespace Edge
@@ -407,11 +407,38 @@ end Edge
 
 Direction convention is deliberately **rootward**: `Edge parent child` means “solve child, then parent is solved.”
 
+The `: Prop` on `Edge` is **normative**, not incidental. Lean would infer it from
+the single proof-valued field, but that inference is fragile: adding any data
+field later would silently move `Edge` into `Type` and change the universe of
+every downstream signature mentioning it. A certified edge carries no data by
+design — metadata belongs on the candidate record (§8.3).
+
+**Universe discipline (normative).** `Goal` is universe-free: its `claim` is a
+`Prop`. Every *index* or *witness* type in the calculus — `BadNode.Witness`,
+`Split.Branch`, `WitnessSplit.Branch`, `Frontier.Task` — is `Type u`, not
+`Type 0`. A research counterexample is not guaranteed to live in the lowest
+universe: any witness that itself carries a type (a family, a code, a
+category-like structure) is at least `Type 1`, and a monomorphic calculus could
+not host it at all. Sibling nodes of one refinement share a universe; a
+`WitnessMap` may cross universes.
+
+The two `trivial` convenience constructors (`Split.trivial`, `Frontier.trivial`)
+are the deliberate exception: they are pinned to `Type 0`. A convenience
+constructor whose universe nothing pins forces every downstream definition built
+from it to become polymorphic, and the level is then unsolvable at the use site.
+Anything needing a trivial node at a higher universe writes the structure
+instance directly.
+
+Ordinary `Type 0` usage must require no universe annotations anywhere. This is a
+testable property, not an aspiration.
+
 ### 6.2 Exact finite/dependent splits
 
 ```lean
+universe u
+
 structure Split (parent : Goal) where
-  Branch : Type
+  Branch : Type u
   child : Branch → Goal
   discharge : (∀ i, (child i).claim) → parent.claim
 ```
@@ -423,17 +450,19 @@ A split is not a collection of tasks; it is a proof that the collection of tasks
 Proposition-level goals are necessary for retrofitting existing theorems, but new structural decompositions should preferentially use explicit counterexample types.
 
 ```lean
+universe u v w
+
 structure BadNode where
-  Witness : Type
+  Witness : Type u
 
 abbrev BadNode.Closed (N : BadNode) : Prop := N.Witness → False
 
-structure WitnessMap (parent child : BadNode) where
+structure WitnessMap (parent : BadNode.{u}) (child : BadNode.{v}) where
   map : parent.Witness → child.Witness
 
-structure WitnessSplit (parent : BadNode) where
-  Branch : Type
-  child : Branch → BadNode
+structure WitnessSplit (parent : BadNode.{u}) where
+  Branch : Type v
+  child : Branch → BadNode.{w}
   classify : parent.Witness → Σ i, (child i).Witness
 ```
 
@@ -563,7 +592,7 @@ the two certified leaves above.
 
 ```lean
 structure Frontier (root : Goal) where
-  Task : Type
+  Task : Type u
   leaf : Task → Goal
   closeRoot : (∀ t, (leaf t).claim) → root.claim
 ```

@@ -15,8 +15,16 @@ structure Goal where
 abbrev Goal.Proved (G : Goal) : Prop := G.claim
 
 /-- `child` is sufficient to discharge `parent`.
-    Direction is rootward: proving `child.claim` yields `parent.claim`. -/
-structure Edge (parent child : Goal) where
+    Direction is rootward: proving `child.claim` yields `parent.claim`.
+
+    The `: Prop` annotation is deliberate and load-bearing. Lean would infer it
+    anyway from the single proof-valued field, but that inference is fragile:
+    adding any data field later (a provenance string, an identifier) would
+    silently move `Edge` into `Type`, changing the universe of every downstream
+    signature that mentions it. Pinning it here turns that mistake into an
+    immediate error. Edges carry no data by design — metadata belongs on the
+    candidate record (§8.3), not on a certified edge. -/
+structure Edge (parent child : Goal) : Prop where
   discharge : child.claim → parent.claim
 
 namespace Edge
