@@ -187,6 +187,60 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-17` / `SPEC-09` — feat: composition debt (§8.2), a toy end-to-end programme, and the projection-reducibility rule (§6.6)
+
+**Composition debt (§8.2).** A syntactically exact proposition can still hide the
+research gap by naming some premises and quietly relying on others — the spec's
+own example is describing an edge as `H2 → FpMomentBudget` while depending on
+`DimKerPsi4ResidualBound` and `LandedH2Count` too. `CRRG/Debt.lean` adds
+`CompositionDebt`, whose target proposition is **computed** from its premise
+list, so there is no second place to put a hypothesis. Shape A (`chain`) and
+Shape B (a bundled obligation) are both provided, with
+`shapeA_iff_shapeB` proving they are the same obligation — so the choice between
+the spec's two permitted encodings is presentational, not semantic.
+
+**Toy end-to-end programme.** Every other test exercises one primitive in
+isolation. `Test/Synthetic/ToyResearch.lean` assembles them into the *shape* of a
+real reduction programme: a rational-radius root with a frozen denominator, a
+two-premise seam theorem mirroring
+`achievable_971426_of_fpMomentBudget_genericTail`, exact root and leaf
+type-links, a monotone family with a certified improvement, a guarded refinement
+keeping the failure branch alive, an escape refinement keeping the exception
+alive, a candidate carrying real composition debt sealed and promoted, a leaf
+split by a certified coverage proof, a route retired by proof, and a frontier
+report. Six asserted rejections cover the dishonest move at each stage.
+
+It imports nothing from any research repository. **This is not Stage B.**
+
+**ℚ without Mathlib.** The session began with a decision to add Mathlib as a
+test-only dependency so fixtures could use `ℚ`. That premise was wrong in one
+direction and right in another, and the resolution is worth recording:
+
+- `Rat` **is** in Lean core, with working arithmetic — so no dependency is needed
+  to state a rational-radius root;
+- but core `Rat` division does **not** reduce in the kernel, so a rational
+  *inequality* is not provable without Mathlib's order lemmas. `decide` and `rfl`
+  both fail on `(1900 : Rat)/4096 ≤ 1`.
+
+The toy therefore keeps ℚ in the *statement* layer and ℕ in the *proof* layer —
+which is what the real adapter does anyway, since the live root names
+`Achievable (971426/2097152 : ℚ)` while both landed leaves are ℕ-indexed. CRRG
+never needs to prove a rational inequality. **No Mathlib dependency was added.**
+Spec §2.2 already permits a test-only one (`SPEC-04`) should a future fixture
+need `Finset`/`Fintype`; adding it later is easy, whereas removing it once
+downstream pins exist is not.
+
+**Projection reducibility (§6.6).** New normative usage section. Instance search,
+`decide` and `omega` run at reducible transparency and will not unfold a plain
+`def`, so projections like `myNode.Witness` or `myFamily.Stronger` become opaque
+atoms and automation fails with errors naming the projection rather than the
+cause. This bit the implementation **four separate times** (`BadNode` fixtures in
+the guard and escape tests, `MonotoneFamily`, and the toy programme's
+predicates), so it is now documented with its four remedies rather than
+rediscovered: declare fixtures `abbrev`; restate goals with `show` when a plain
+`def` is wanted; annotate binders at their concrete type; and make a type a
+parameter rather than a field where it is incidental to the abstraction.
+
 #### `CHG-16` / `SPEC-08` — feat: banned-construct scan and no-aggregate reporting (§14.2 items 2, 6, 7; §5.6; §8.7)
 
 Three normative gate requirements had no implementation.

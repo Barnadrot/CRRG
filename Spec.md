@@ -518,6 +518,45 @@ A generic conversion produces a `WitnessSplit` with two branches.
 
 This is the static analogue of ArkLib’s guarded-verifier discipline.
 
+### 6.6 Projection reducibility (normative usage rule)
+
+Several CRRG types carry a `Type`- or `Prop`-valued **field** that user code then
+projects: `BadNode.Witness`, `Split.Branch`, `Frontier.Task`,
+`MonotoneFamily.Stronger`, `MonotoneFamily.claim`. Lean's instance search,
+`decide`, and `omega` run at reducible/instances transparency and will **not**
+unfold a plain `def`. So given
+
+```lean
+def myNode : BadNode := ⟨Nat⟩
+```
+
+the type `myNode.Witness` does not reduce to `ℕ` during instance search, and
+numerals, `<`, `decide` and `omega` all fail against it with errors that name the
+projection rather than the cause.
+
+This is not a Lean defect and not something CRRG can abstract away — the field
+*is* the abstraction in each of these cases. It is a usage rule, and it bit the
+implementation four separate times, so it is recorded here rather than
+rediscovered:
+
+1. **Declare node/family fixtures with `abbrev`, not `def`,** when their
+   projected fields appear in goals solved by automation.
+2. **Where a plain `def` is wanted** — as a downstream adapter will normally use
+   for its predicates — restate the goal in unfolded form first:
+   `by show 2 * 1900 ≤ denom; decide`. The kernel unfolds `def`s happily; only
+   the search procedures do not.
+3. **Annotate binders at their concrete type** when a tactic must see through
+   them: `classify := fun (z : Int) => ...` rather than `classify z := ...`,
+   otherwise `omega` does not recognise `z` as an integer atom.
+4. **Where the type is incidental rather than the point of the abstraction, make
+   it a parameter instead of a field.** `MonotoneFamily` takes `Param` as a
+   parameter for exactly this reason. `BadNode` cannot: a bad node *is* its
+   witness type.
+
+CRRG's own API takes decidability as an explicit argument wherever it needs it
+(§7.4), for the same reason: `[DecidableEq F.Task]` cannot be synthesized against
+a frontier declared with `def`.
+
 ---
 
 ## 7. Root package and live frontier
