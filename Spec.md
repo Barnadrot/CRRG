@@ -256,7 +256,7 @@ Removing CRRG should likewise require only reverting the dependency/adapter inte
 
 ## 3. Source-derived design constraints
 
-### 2.1 What to reuse from ArkLib
+### 3.1 What to reuse from ArkLib
 
 ArkLib treats `OracleReduction/` as its conceptual center. Its key architectural idea is not “protocols are interactive”; it is that a large security theorem is represented by typed intermediate statements, explicit relations, named security properties, and composition theorems.
 
@@ -272,7 +272,7 @@ Relevant patterns:
 
 CRRG should copy these *composition disciplines*, not the IOR execution monad.
 
-### 2.2 What to preserve from `proximity-research`
+### 3.2 What to preserve from `proximity-research`
 
 The private repository already has strong trust engineering:
 
@@ -305,7 +305,7 @@ The architecture should feel like ArkLib CWSS packages, but the semantic currenc
 
 ## 5. Trust model and non-negotiable invariants
 
-### 4.1 Frozen root
+### 5.1 Frozen root
 
 The root remains the existing target, for example:
 
@@ -317,7 +317,7 @@ and eventually an exported ArkLib `ListLowerWitness` via the existing bridge.
 
 No CRRG change is allowed to redefine `Achievable`, the code, the field, the domain, the security threshold, or the radius normalization.
 
-### 4.2 Every edge is Lean
+### 5.2 Every edge is Lean
 
 No prose-only arrow counts.
 
@@ -329,19 +329,19 @@ MomentTarget -> quadratic locator configuration
 
 but that node does not enter the trusted frontier until Lean contains a theorem of the exact implication/classification type.
 
-### 4.3 Every split proves coverage
+### 5.3 Every split proves coverage
 
 An agent may not earn credit for proving cases `A`, `B`, and `C` unless the parent-to-branches theorem proves that every parent counterexample lies in `A ∨ B ∨ C` (or a dependent equivalent).
 
-### 4.4 Guards produce sibling branches
+### 5.4 Guards produce sibling branches
 
 If a transformation is valid only when `p w`, the non-`p` case becomes an explicit branch. Never encode “assume `p`” unless `p` is already a theorem from the parent node.
 
-### 4.5 Exceptions are never deleted
+### 5.5 Exceptions are never deleted
 
 If a reduction either produces the desired structured object or an exceptional object, use an explicit two-way split / escape package. The exception remains on the frontier until separately killed or consumed.
 
-### 4.6 No synthetic global percentage
+### 5.6 No synthetic global percentage
 
 CRRG must not print “63% solved”, closed-leaf percentages, theorem counts, pin counts, or a weighted sum chosen by an agent.
 
@@ -366,7 +366,7 @@ ProximityPrize/Squeeze/Soundness/ResearchGraph/
 
 Do not modify ArkLib or the frozen Squeeze core for v0.3.
 
-### 5.1 Proposition-level goals
+### 6.1 Proposition-level goals
 
 ```lean
 namespace ProximityPrize.Squeeze.Soundness.ResearchGraph
@@ -392,7 +392,7 @@ end Edge
 
 Direction convention is deliberately **rootward**: `Edge parent child` means “solve child, then parent is solved.”
 
-### 5.2 Exact finite/dependent splits
+### 6.2 Exact finite/dependent splits
 
 ```lean
 structure Split (parent : Goal) where
@@ -403,7 +403,7 @@ structure Split (parent : Goal) where
 
 A split is not a collection of tasks; it is a proof that the collection of tasks is sufficient.
 
-### 5.3 Counterexample nodes (preferred for structural research)
+### 6.3 Counterexample nodes (preferred for structural research)
 
 Proposition-level goals are necessary for retrofitting existing theorems, but new structural decompositions should preferentially use explicit counterexample types.
 
@@ -436,7 +436,7 @@ theorem WitnessSplit.closed_parent
 
 This is the strongest correctness shape for research case splits: exhaustiveness is represented by an actual classifier from every parent witness into a branch.
 
-### 5.4 Explicit escape package
+### 6.4 Explicit escape package
 
 Semantically this is a two-way `WitnessSplit`, but the name matters operationally:
 
@@ -449,7 +449,7 @@ Use it whenever a proof says “either the desired normalization succeeds, or an
 
 The orchestrator must create one task for `main` and one task for `escape`; the latter cannot disappear into prose.
 
-### 5.5 Guarded transformation helper
+### 6.5 Guarded transformation helper
 
 A guarded transform must consume both truth values:
 
@@ -468,7 +468,7 @@ This is the static analogue of ArkLib’s guarded-verifier discipline.
 
 ## 7. Root package and live frontier
 
-### 6.1 Root goal
+### 7.1 Root goal
 
 For each active rung, define the exact goal once:
 
@@ -487,7 +487,7 @@ def radius (d : ℕ) : ℚ := d / 2097152
 
 with a frozen/type-linked theorem `radius d = ...` where needed.
 
-### 6.2 Current exact root seam on `soundness`
+### 7.2 Current exact root seam on `soundness`
 
 The live branch already contains the correct two-premise composition theorem in
 `ProximityPrize/Squeeze/Soundness/MomentRecovery.lean`:
@@ -534,7 +534,7 @@ only after Lean contains the full source-faithful edge from that theorem,
 through the H2 count and rank-free H1/H0 specializations, into one or both of
 the two certified leaves above.
 
-### 6.3 Frontier package
+### 7.3 Frontier package
 
 ```lean
 structure Frontier (root : Goal) where
@@ -567,7 +567,7 @@ def current971426 : Frontier target971426 where
 
 **Important:** task count has no reward meaning.
 
-### 6.4 Refinement
+### 7.4 Refinement
 
 Provide generic frontier refinement later, after the pilot:
 
@@ -586,7 +586,7 @@ The certified CRRG must remain brutally literal: every certified edge is a Lean 
 
 The candidate layer exists to expose formalization debt without pretending that debt has already been paid.
 
-### 7.1 Hard invariant: there are no prose edges inside CRRG
+### 8.1 Hard invariant: there are no prose edges inside CRRG
 
 A candidate edge is **not** a sentence such as:
 
@@ -631,7 +631,7 @@ Only after that theorem passes the ordinary build, axiom audit, and type-link ch
 
 **Rule:** if an arrow does not have an exact Lean target type, it is not part of CRRG at all.
 
-### 7.2 Candidate edges must expose all composition debt
+### 8.2 Candidate edges must expose all composition debt
 
 A syntactically exact proposition can still hide the actual research gap by introducing extra hypotheses casually.
 
@@ -673,7 +673,7 @@ def E3Target : Prop :=
 
 Both are acceptable. What is forbidden is describing the edge as "H2 -> FpMomentBudget" while silently relying on untracked side conditions.
 
-### 7.3 Candidate record
+### 8.3 Candidate record
 
 A candidate edge should carry machine-readable metadata in addition to its exact proposition.
 
@@ -703,7 +703,7 @@ status
 
 The prose rationale, research motivation, and expected proof mechanism may live beside the record but are not graph semantics.
 
-### 7.4 Candidate lifecycle
+### 8.4 Candidate lifecycle
 
 Candidate edges have a strict lifecycle:
 
@@ -735,7 +735,7 @@ Definitions:
 
 A sealed target may never be weakened in place. If the target changes, create a new candidate ID and retain the old one.
 
-### 7.5 Anti-proxy rule for candidate promotion
+### 8.5 Anti-proxy rule for candidate promotion
 
 Once an agent is assigned a sealed candidate, the proposition is immutable for that attempt.
 
@@ -763,7 +763,7 @@ new sealed candidate E23Target includes X explicitly
 
 This is the candidate-layer analogue of the frozen Grand Challenge root.
 
-### 7.6 Candidate promotion is objective formalization progress, not prize progress
+### 8.6 Candidate promotion is objective formalization progress, not prize progress
 
 A transition
 
@@ -785,7 +785,7 @@ E17: SEALED_UNVERIFIED -> MALFORMED
 
 may be highly valuable. It proves that the research blueprint was missing a real obligation.
 
-### 7.7 Certified graph vs typed promotion queue
+### 8.7 Certified graph vs typed promotion queue
 
 The user-facing or agent-facing state should distinguish them visually and semantically:
 
@@ -816,7 +816,7 @@ Only the certified frontier can close the root.
 
 The typed promotion queue guides research and formalization, but its edges contribute zero trusted root closure until promoted.
 
-### 7.8 Candidate graph history
+### 8.8 Candidate graph history
 
 Every sealed candidate should be preserved with:
 
@@ -866,7 +866,7 @@ That is the recommended long-term semantic model.
 
 CRRG deliberately distinguishes **structural progress** from **quantitative progress**.
 
-### 8.1 Structural progress
+### 10.1 Structural progress
 
 Examples:
 
@@ -878,7 +878,7 @@ These are valuable if and only if the split/classifier is Lean-certified.
 
 Reward: the exact split theorem lands. No scalar magnitude.
 
-### 8.2 Quantitative progress
+### 10.2 Quantitative progress
 
 For fixed node families with a mathematically canonical order, expose that order.
 
@@ -897,7 +897,7 @@ An agent assigned to such a family may receive local numerical reward only when 
 
 Never compare unrelated local currencies (e.g. “3 bits of moment slack” versus “one case eliminated”) by a hand-chosen exchange rate.
 
-### 8.3 Optional certified root-bound evaluator
+### 10.3 Optional certified root-bound evaluator
 
 A later phase may attach fallback bounds to every branch and compose them by exact `sum`, `max`, or product lemmas, producing a valid root upper bound even before the threshold is reached.
 
@@ -938,7 +938,7 @@ This is enough to give an agent a correct reward signal without inventing a glob
 
 A graph change is a mathematical event, not project-management metadata.
 
-### 10.1 Valid refinement
+### 12.1 Valid refinement
 
 To replace leaf `L` by children `C_i`, the same commit must contain:
 
@@ -950,7 +950,7 @@ or preferably a witness classifier proving exhaustive coverage.
 
 Only after that theorem builds may the orchestrator assign `C_i` as independent tasks.
 
-### 10.2 Invalid refinement
+### 12.2 Invalid refinement
 
 Reject any change that does only one of:
 
@@ -961,7 +961,7 @@ Reject any change that does only one of:
 - replaces a false historical premise by a nearby plausible premise without rebuilding the parent edge;
 - measures “fraction of cases” without a certified measure/partition theorem.
 
-### 10.3 Retirement
+### 12.3 Retirement
 
 A historical route can remain in source, but it must be removed from the **live frontier** when:
 
@@ -1002,11 +1002,11 @@ No frozen-file changes are required for the pilot.
 
 ## 14. Verification integration
 
-### 12.1 Keep `verify.sh` prize output unchanged
+### 14.1 Keep `verify.sh` prize output unchanged
 
 Do not add intermediate scores to its `TARGET` section.
 
-### 12.2 Add a separate graph gate
+### 14.2 Add a separate graph gate
 
 `verify_research_graph.sh` should:
 
@@ -1023,7 +1023,7 @@ Do not add intermediate scores to its `TARGET` section.
 
 The orchestrator may use the individual status of the task it assigned as the reward signal.
 
-### 12.3 Graph integrity
+### 14.3 Graph integrity
 
 `Current.lean` is the authority for the live graph. `state/research_graph/CURRENT.md` is generated commentary.
 
@@ -1464,7 +1464,7 @@ The pilot is successful if all of the following hold:
 
 ---
 
-## 18. Design summary
+## 19. Design summary
 
 CRRG should make this transformation:
 
@@ -1515,7 +1515,7 @@ That gives agents a dense, correct local reward while preserving the only global
 
 ---
 
-## 19. Source map used for this spec
+## 20. Source map used for this spec
 
 ### ArkLib (inspected at commit `14a4b351d154cacd7b01ff58bf505c1572112098`)
 

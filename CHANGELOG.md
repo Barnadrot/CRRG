@@ -11,7 +11,7 @@ and the reason for each.
 Conventions:
 
 - **Spec references** use the section numbers as they appear in `Spec.md` after
-  the v0.4 heading repair (`SPEC-01`). Where the pre-repair spec used a
+  the `SPEC-01` heading repair. Where the pre-repair spec used a
   conflicting subsection number, both are given, as `§14 (12.x)`.
 - **Status** is one of `DONE`, `PARTIAL`, `MISSING`, `DEFERRED` (out of scope
   for the current stage, with the gating stage named), or `DOWNSTREAM` (belongs
@@ -33,7 +33,7 @@ Conventions:
 
 The out-of-repo copy `../CERTIFIED_RESEARCH_REDUCTION_GRAPH_SPEC.md` is spec
 **v0.1** and is deliberately left untouched as an independent validation
-reference. It is *not* a mirror of `Spec.md` (v0.3, becoming v0.4): it predates
+reference. It is *not* a mirror of `Spec.md` (v0.5, becoming v0.6): it predates
 the standalone-repository architecture (§2), the typed candidate graph (§8), and
 the staged implementation plan (§15). Do not reconcile the two.
 
@@ -186,6 +186,37 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
+
+#### `SPEC-01` — spec: repair subsection numbering and duplicate section numbers
+
+Purely structural; no normative content changed. `Spec.md` had accumulated
+numbering damage from inserting sections without renumbering their children, so
+a citation like "§12.2" was ambiguous between two different sections — a real
+hazard for a document that automated agents are meant to cite.
+
+Every `###` subsection now matches its parent `##` section:
+
+| Section | Subsections were | now |
+|---------|------------------|-----|
+| §3 Source-derived design constraints | 2.1–2.2 | 3.1–3.2 |
+| §5 Trust model | 4.1–4.6 | 5.1–5.6 |
+| §6 Lean API | 5.1–5.5 | 6.1–6.5 |
+| §7 Root package and live frontier | 6.1–6.4 | 7.1–7.4 |
+| §8 Typed candidate graph | 7.1–7.8 | 8.1–8.8 |
+| §10 Quantitative partial progress | 8.1–8.3 | 10.1–10.3 |
+| §12 Graph-change protocol | 10.1–10.3 | 12.1–12.3 |
+| §14 Verification integration | 12.1–12.3 | 14.1–14.3 |
+
+Two sections were both numbered `## 18` ("Acceptance criteria" and "Design
+summary"). "Design summary" becomes §19 and "Source map" becomes §20.
+
+Result: sections run 1–20 with no duplicates, and every subsection number
+matches its parent.
+
+**Also noted, not yet fixed:** the document header declares `v0.5`, while §18 is
+titled "Acceptance criteria for v0.3" and the body defers items to "v0.2" and
+"v0.3". Version normalisation is handled in `SPEC-02` together with the
+semantic amendments.
 
 #### `CHG-11` — docs: bring `README.md`, `AGENTS.md` and `crrg-status` in line
 
