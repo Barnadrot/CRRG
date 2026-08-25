@@ -1,11 +1,12 @@
+import CRRG.Frontier
+import CRRG.Candidate
+
 /-!
 # CRRG.Audit
 
 Audit utilities: type-linking helpers and frontier introspection.
 -/
 
-import CRRG.Frontier
-import CRRG.Candidate
 
 namespace CRRG
 

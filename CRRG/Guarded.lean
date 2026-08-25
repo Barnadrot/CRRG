@@ -1,3 +1,5 @@
+import CRRG.Witness
+
 /-!
 # CRRG.Guarded
 
@@ -5,7 +7,6 @@ Guarded transformations that must consume both truth values of a guard.
 The static analogue of ArkLib's guarded-verifier discipline.
 -/
 
-import CRRG.Witness
 
 namespace CRRG
 

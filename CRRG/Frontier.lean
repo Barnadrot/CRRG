@@ -1,3 +1,6 @@
+import CRRG.Basic
+import CRRG.Split
+
 /-!
 # CRRG.Frontier
 
@@ -5,8 +8,6 @@ The live frontier: the kernel-authoritative set of obligations whose
 complete discharge implies the root goal.
 -/
 
-import CRRG.Basic
-import CRRG.Split
 
 namespace CRRG
 

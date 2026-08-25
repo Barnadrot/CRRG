@@ -1,10 +1,11 @@
+import CRRG
+
 /-!
 # Synthetic test: GuardedMap
 
 Tests that guarded refinements retain both pass and fail branches.
 -/
 
-import CRRG
 
 open CRRG
 

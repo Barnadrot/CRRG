@@ -1,3 +1,5 @@
+import CRRG.Basic
+
 /-!
 # CRRG.Witness
 
@@ -6,7 +8,6 @@ Counterexample-based nodes for structural research decompositions.
 the set is empty. `WitnessMap` and `WitnessSplit` compose these nodes.
 -/
 
-import CRRG.Basic
 
 namespace CRRG
 

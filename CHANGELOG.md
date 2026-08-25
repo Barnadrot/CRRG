@@ -187,6 +187,21 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-01` — fix: move `import` above module doc-comments
+
+Lean 4 requires every `import` to precede all other content, module
+doc-comments included. Twelve files placed `/-! ... -/` first, so the
+elaborator rejected each with `invalid 'import' command, it must be used in the
+beginning of the file`: six of eight core modules (`Split`, `Witness`,
+`Guarded`, `Escape`, `Frontier`, `Audit`) and all six test modules. Only
+`Basic` and `Candidate`, which have no imports, compiled.
+
+This is the first of four commits needed to make the baseline build; the build
+is still red after this one (see `CHG-02`..`CHG-04`).
+
+Also gitignores the generated `lake-manifest.json` (CRRG has no dependencies to
+pin).
+
 ---
 
 ## 3. Deliberate deviations from spec

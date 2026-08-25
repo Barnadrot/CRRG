@@ -1,3 +1,5 @@
+import CRRG
+
 /-!
 # Synthetic test: Negative tests
 
@@ -7,7 +9,6 @@ Tests that CRRG correctly rejects invalid operations:
 - Non-exhaustive classifiers cannot be constructed
 -/
 
-import CRRG
 
 open CRRG
 

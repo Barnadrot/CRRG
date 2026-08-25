@@ -1,3 +1,5 @@
+import CRRG
+
 /-!
 # Synthetic test: Candidate sealing and promotion
 
@@ -5,7 +7,6 @@ Tests the candidate lifecycle: DRAFT → SEALED_UNVERIFIED → CERTIFIED.
 Verifies that promotion requires inhabiting the exact sealed proposition.
 -/
 
-import CRRG
 
 open CRRG
 

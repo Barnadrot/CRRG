@@ -1,10 +1,11 @@
+import CRRG
+
 /-!
 # Synthetic test: EscapeMap
 
 Tests that escape refinements keep the exceptional branch explicit.
 -/
 
-import CRRG
 
 open CRRG
 

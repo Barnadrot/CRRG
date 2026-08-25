@@ -1,3 +1,5 @@
+import CRRG.Basic
+
 /-!
 # CRRG.Split
 
@@ -5,7 +7,6 @@ Exact finite/dependent splits: a `Split` proves that solving all branches
 is sufficient to discharge the parent.
 -/
 
-import CRRG.Basic
 
 namespace CRRG
 

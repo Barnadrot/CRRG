@@ -1,10 +1,11 @@
+import CRRG
+
 /-!
 # Synthetic test: Edge composition
 
 Tests `Edge`, `Edge.id`, `Edge.trans` on small propositions.
 -/
 
-import CRRG
 
 open CRRG
 

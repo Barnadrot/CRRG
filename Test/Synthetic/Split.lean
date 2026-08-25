@@ -1,10 +1,11 @@
+import CRRG
+
 /-!
 # Synthetic test: Split
 
 Tests exhaustive `Split` on a two-branch decomposition.
 -/
 
-import CRRG
 
 open CRRG
 

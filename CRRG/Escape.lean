@@ -1,3 +1,5 @@
+import CRRG.Witness
+
 /-!
 # CRRG.Escape
 
@@ -6,7 +8,6 @@ produces the desired object or an exceptional one. The exception
 remains on the frontier until separately handled.
 -/
 
-import CRRG.Witness
 
 namespace CRRG
 
