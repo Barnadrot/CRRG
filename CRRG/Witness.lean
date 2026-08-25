@@ -1,4 +1,5 @@
 import CRRG.Basic
+import CRRG.Split
 
 /-!
 # CRRG.Witness
@@ -17,7 +18,7 @@ structure BadNode where
   Witness : Type
 
 /-- A `BadNode` is closed when its witness type is empty. -/
-abbrev BadNode.Closed (N : BadNode) : Prop := IsEmpty N.Witness
+abbrev BadNode.Closed (N : BadNode) : Prop := N.Witness → False
 
 /-- A map from parent witnesses to child witnesses.
     If the child is closed, the parent is closed. -/
@@ -37,7 +38,7 @@ def trans {A B C : BadNode} (ab : WitnessMap A B) (bc : WitnessMap B C) : Witnes
 theorem closed_parent {parent child : BadNode}
     (r : WitnessMap parent child)
     (hChild : child.Closed) : parent.Closed :=
-  ⟨fun w => hChild.false (r.map w)⟩
+  fun w => hChild (r.map w)
 
 /-- Convert a `WitnessMap` into a proposition-level `Edge`. -/
 def toEdge {parent child : BadNode}
@@ -60,9 +61,9 @@ namespace WitnessSplit
 theorem closed_parent {parent : BadNode}
     (s : WitnessSplit parent)
     (hAll : ∀ i, (s.child i).Closed) : parent.Closed :=
-  ⟨fun w =>
+  fun w =>
     let ⟨i, wi⟩ := s.classify w
-    (hAll i).false wi⟩
+    hAll i wi
 
 /-- Convert a `WitnessSplit` into a proposition-level `Split`. -/
 def toSplit {parent : BadNode}

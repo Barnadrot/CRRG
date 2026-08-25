@@ -187,6 +187,22 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-02` — fix: make `BadNode.Closed` Mathlib-free; add missing `Split` import
+
+Two independent defects in `CRRG/Witness.lean`:
+
+1. `BadNode.Closed` was defined as `IsEmpty N.Witness`, and the proofs used the
+   `IsEmpty` API (`.false`, anonymous-constructor introduction). `IsEmpty` lives
+   in Mathlib, which this package deliberately does not depend on (§2.2: "prefer
+   Lean core types and logic where sufficient; avoid creating an unnecessary
+   independent Mathlib-version constraint"). The declaration did not elaborate.
+   Replaced by the Lean-core-only `N.Witness → False`, which is definitionally
+   the same proposition. See `DEV-01`.
+2. `WitnessSplit.toSplit` returns a `Split`, but the module imported only
+   `CRRG.Basic`. Added `import CRRG.Split`.
+
+Second of four commits required to make the baseline build; still red.
+
 #### `CHG-01` — fix: move `import` above module doc-comments
 
 Lean 4 requires every `import` to precede all other content, module
@@ -209,4 +225,20 @@ pin).
 Recorded here so a reviewer can distinguish an intentional amendment from an
 implementation error. Each has a corresponding `Spec.md` edit.
 
-Nothing yet.
+#### `DEV-01` — `BadNode.Closed` uses `Witness → False`, not `IsEmpty`
+
+**Spec §6 (5.3)** writes `abbrev BadNode.Closed (N : BadNode) : Prop := IsEmpty N.Witness`.
+
+`IsEmpty` is a Mathlib class. Spec §2.2 requires the CRRG core to be
+dependency-light and to avoid an independent Mathlib-version constraint. The two
+requirements are in direct conflict, and §2.2 is the load-bearing one: a Mathlib
+pin in the core would propagate to every downstream consumer.
+
+`Closed` is therefore `N.Witness → False`. This is the same proposition
+(`IsEmpty α` is a one-field structure wrapping exactly this arrow), so every
+theorem in the spec still holds verbatim; only the introduction and elimination
+syntax differs. CRRG never needs `Closed` to be found by instance search — it is
+always passed explicitly as a hypothesis — so nothing is lost by dropping the
+class.
+
+`Spec.md` amended accordingly (`SPEC-02`).
