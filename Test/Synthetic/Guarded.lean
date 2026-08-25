@@ -9,9 +9,9 @@ Tests that guarded refinements retain both pass and fail branches.
 
 open CRRG
 
-private def parentNode : BadNode := ⟨Nat⟩
-private def passNode : BadNode := ⟨{ n : Nat // n < 10 }⟩
-private def failNode : BadNode := ⟨{ n : Nat // ¬(n < 10) }⟩
+private abbrev parentNode : BadNode := ⟨Nat⟩
+private abbrev passNode : BadNode := ⟨{ n : Nat // n < 10 }⟩
+private abbrev failNode : BadNode := ⟨{ n : Nat // ¬(n < 10) }⟩
 
 private def guardedExample : GuardedMap parentNode passNode failNode where
   guard n := decide (n < 10)

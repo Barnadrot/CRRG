@@ -187,6 +187,29 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-04` — fix: make `BadNode` test fixtures reducible — **build is green from here**
+
+`Test/Synthetic/{Guarded,Escape}.lean` declared their fixtures as
+`private def parentNode : BadNode := ⟨Nat⟩`. A plain `def` is semi-reducible, so
+`parentNode.Witness` never reduced to `Nat`, and:
+
+- instance search could not find `LT`/`LE`/`OfNat` for the witness type, so
+  `decide (n < 10)` and `z ≥ 0` failed to elaborate;
+- `omega` refused the `Escape` obligation, because a hypothesis whose subject
+  has type `parentNode.Witness` rather than syntactically `Int` is not
+  recognised as an integer-linear atom.
+
+Changed the fixtures to `private abbrev`, and annotated the `EscapeMap.classify`
+binder as `fun (z : Int) => ...` so `omega` sees a concrete `Int`.
+
+This is the last of the four build-breaking defects. `lake build CRRG` and
+`lake build Test` both succeed from this commit onward.
+
+**Note on the general problem.** This is not only a test artefact: any
+`Frontier`/`BadNode` declared with a plain `def` will resist instance search on
+its projected type fields. `CHG-09` avoids inflicting this on downstream users
+by taking decidability as an explicit argument rather than an instance.
+
 #### `CHG-03` — fix: `trivial` resolved to `CRRG.Frontier.trivial` in the type-link helpers
 
 All three type-link helpers in `CRRG/Audit.lean` were defined as

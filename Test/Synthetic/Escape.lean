@@ -9,12 +9,12 @@ Tests that escape refinements keep the exceptional branch explicit.
 
 open CRRG
 
-private def parentNode : BadNode := ⟨Int⟩
-private def mainNode : BadNode := ⟨{ z : Int // z ≥ 0 }⟩
-private def escapeNode : BadNode := ⟨{ z : Int // z < 0 }⟩
+private abbrev parentNode : BadNode := ⟨Int⟩
+private abbrev mainNode : BadNode := ⟨{ z : Int // z ≥ 0 }⟩
+private abbrev escapeNode : BadNode := ⟨{ z : Int // z < 0 }⟩
 
 private def escapeExample : EscapeMap parentNode mainNode escapeNode where
-  classify z :=
+  classify := fun (z : Int) =>
     if h : z ≥ 0 then
       Sum.inl ⟨z, h⟩
     else
