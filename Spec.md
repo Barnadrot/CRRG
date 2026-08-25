@@ -1,7 +1,7 @@
 # Certified Research Reduction Graph (CRRG)
 ## A kernel-checked partial-progress architecture for the Proximity Grand Challenges
 
-**Status:** proposed v0.5 — refreshed against live `soundness` branch, iteration 1132 frontier  
+**Status:** v0.6 — first revision reconciled against a building, self-testing implementation. Supersedes v0.5 (spec-only).  
 **Repository architecture:** CRRG is a standalone general-purpose Lean repository consumed as a pinned dependency by research projects.  
 **First downstream integration:** private `proximity-research` LDB soundness program (`soundness` branch).  
 **Historical integration target:** existing frozen Disprove side, unchanged by this revision.  
@@ -364,7 +364,7 @@ Implement the pilot under the writable soundness subtree first:
 ProximityPrize/Squeeze/Soundness/ResearchGraph/
 ```
 
-Do not modify ArkLib or the frozen Squeeze core for v0.3.
+Do not modify ArkLib or the frozen Squeeze core while the pilot is in progress.
 
 ### 6.1 Proposition-level goals
 
@@ -411,7 +411,7 @@ Proposition-level goals are necessary for retrofitting existing theorems, but ne
 structure BadNode where
   Witness : Type
 
-abbrev BadNode.Closed (N : BadNode) : Prop := IsEmpty N.Witness
+abbrev BadNode.Closed (N : BadNode) : Prop := N.Witness → False
 
 structure WitnessMap (parent child : BadNode) where
   map : parent.Witness → child.Witness
@@ -435,6 +435,16 @@ theorem WitnessSplit.closed_parent
 ```
 
 This is the strongest correctness shape for research case splits: exhaustiveness is represented by an actual classifier from every parent witness into a branch.
+
+**`Closed` is deliberately not Mathlib's `IsEmpty`.** §2.2 requires the CRRG core
+to be dependency-light and to avoid an independent Mathlib-version constraint,
+which would otherwise propagate to every downstream consumer. `IsEmpty α` is a
+one-field structure wrapping exactly `α → False`, so the two are the same
+proposition and every theorem above holds verbatim; only the introduction and
+elimination syntax differs. CRRG never needs `Closed` to be found by instance
+search — it is always supplied explicitly as a hypothesis — so nothing is lost
+by dropping the class. Downstream projects that do depend on Mathlib may bridge
+the two with `⟨·⟩` and `IsEmpty.false` in a single line.
 
 ### 6.4 Explicit escape package
 
@@ -903,7 +913,7 @@ A later phase may attach fallback bounds to every branch and compose them by exa
 
 This would yield a dense scalar signal such as an actual proved `Lambda ≤ B_current`.
 
-Do **not** implement this in v0.2 unless the decomposition naturally provides valid fallback bounds. A fake scalar is worse than binary tasks.
+Do **not** implement this until the decomposition naturally provides valid fallback bounds. A fake scalar is worse than binary tasks.
 
 ---
 
@@ -1304,7 +1314,7 @@ For CRRG work, use:
 `merger` is historical for this pilot. Do not read it to determine the live
 Soundness frontier.
 
-The existing Disprove side is left exactly as-is by CRRG v0.3. Its frozen upper
+The existing Disprove side is left exactly as-is by CRRG. Its frozen upper
 bound and existing graph/ledger role remain untouched.
 
 ### Phase 1 — standalone CRRG infrastructure
@@ -1437,7 +1447,7 @@ The ArkLib precedent suggests the right upstream threshold: generic abstractions
 
 ---
 
-## 18. Acceptance criteria for v0.3
+## 18. Acceptance criteria for v0.6
 
 The pilot is successful if all of the following hold:
 

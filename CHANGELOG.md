@@ -187,6 +187,21 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `SPEC-02` — spec: normalise the version and amend `BadNode.Closed` to be Mathlib-free
+
+**Version.** The document declared `v0.5` in its header while §18 was titled
+"Acceptance criteria for **v0.3**" and the body deferred items to "v0.2" and
+"v0.3". Three different version numbers were in play for one document, and the
+milestone references had no fixed meaning. Normalised to **v0.6** — the first
+revision reconciled against an implementation that actually builds — and
+rewrote the stale milestone deferrals as unconditional statements
+("until the decomposition naturally provides valid fallback bounds" rather than
+"in v0.2").
+
+**`BadNode.Closed`.** Amended §6.3 from `IsEmpty N.Witness` to
+`N.Witness → False`, with the rationale inline. See `DEV-01`; this is the spec
+side of `CHG-02`.
+
 #### `SPEC-01` — spec: repair subsection numbering and duplicate section numbers
 
 Purely structural; no normative content changed. `Spec.md` had accumulated
