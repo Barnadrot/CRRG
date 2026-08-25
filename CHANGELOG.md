@@ -187,6 +187,47 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-15` / `SPEC-07` — feat: monotone parameterized families (§10.2)
+
+§10.2 permits a *local numerical* reward for node families with a canonical
+parameter order, under two conditions: an explicit monotonicity theorem, and
+progress measured only against a strictly stronger parameter under identical node
+semantics. It also forbids comparing unrelated local currencies by a hand-chosen
+exchange rate.
+
+None of this had any representation. There was no way to declare a family, no
+way to state a monotonicity theorem, and consequently no way for the orchestrator
+to distinguish a real improvement from a restatement.
+
+Adds `CRRG/Monotone.lean`:
+
+- `MonotoneFamily Param` — `Stronger` (a preorder), `claim`, and **`monotone` as
+  a field**, so a family cannot be declared without proving the monotonicity
+  theorem;
+- `StrictlyStronger` — irreflexive, transitive, asymmetric, so re-proving the
+  same parameter earns nothing;
+- `Progress F old new` — the only numerical reward CRRG recognises, requiring
+  simultaneously the same family, a strict improvement, and a proof at the new
+  parameter;
+- `Progress.implies_old` — a theorem that progress never loses ground: a proof at
+  a strictly stronger parameter still proves the old claim, so an agent cannot be
+  rewarded for an "improvement" that abandons what was established;
+- `MonotoneFamily.edge` — monotonicity viewed as a rootward CRRG edge.
+
+**The prohibition on exchange rates is the absence of an operation.** `Progress`
+is indexed by its family, and nothing combines progress across families. Two of
+the eight tests assert exactly this: progress in a `momentBound` family is
+rejected as progress in a `listBound` family even though both are over `ℕ` and
+both improve 3 → 5, and `Progress.trans` refuses to chain across families.
+
+**`Param` is a parameter, not a field.** A `Type`-valued field would be projected
+as `F.Param` at every use site, and projections of a plain `def` do not reduce
+during instance search — numerals and `omega` fail against `F.Param` even when
+the family is over `ℕ`. This was hit directly while writing the tests. Where a
+type field is the point of the abstraction (a `BadNode` *is* its witness type)
+the cost is unavoidable; here it is incidental, so it belongs in the signature.
+Spec §10.2 records the corresponding declaration idiom (`abbrev`, not `def`).
+
 #### `CHG-14` / `SPEC-06` — feat: Lean-enforced candidate lifecycle
 
 Rewrites the candidate layer so that illegal transitions are untypeable rather

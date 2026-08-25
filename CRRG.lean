@@ -4,5 +4,6 @@ import CRRG.Witness
 import CRRG.Guarded
 import CRRG.Escape
 import CRRG.Frontier
+import CRRG.Monotone
 import CRRG.Candidate
 import CRRG.Audit

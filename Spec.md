@@ -1051,6 +1051,50 @@ An agent assigned to such a family may receive local numerical reward only when 
 
 Never compare unrelated local currencies (e.g. “3 bits of moment slack” versus “one case eliminated”) by a hand-chosen exchange rate.
 
+Both conditions are **structural**, not editorial:
+
+```lean
+structure MonotoneFamily (Param : Type u) where
+  Stronger : Param → Param → Prop
+  claim : Param → Prop
+  stronger_refl : ∀ p, Stronger p p
+  stronger_trans : ∀ {a b c}, Stronger a b → Stronger b c → Stronger a c
+  /-- The monotonicity theorem, as a field: a family cannot exist without it. -/
+  monotone : ∀ {a b}, Stronger a b → claim a → claim b
+
+def MonotoneFamily.StrictlyStronger (F : MonotoneFamily Param) (a b : Param) : Prop :=
+  F.Stronger a b ∧ ¬ F.Stronger b a
+
+/-- The only numerical reward CRRG recognises. -/
+structure Progress (F : MonotoneFamily Param) (old new : Param) where
+  improvement : F.StrictlyStronger new old
+  proof : F.claim new
+```
+
+- **The monotonicity theorem is a field**, so declaring a family without proving
+  it is impossible.
+- **`Progress` is indexed by the family**, so progress in one family is not
+  progress in another — even when both are parameterised by `ℕ` and both improve
+  the same numerals. There is deliberately **no** operation that adds, averages,
+  or exchanges progress across families. The absence of that operation *is* the
+  prohibition on exchange rates.
+- **`Progress.implies_old` is a theorem**: a proof at a strictly stronger
+  parameter still proves the old parameter's claim. An agent can never be
+  rewarded for an "improvement" that abandons what was already established.
+- `StrictlyStronger` is irreflexive, so re-proving the same parameter earns
+  nothing.
+
+`Stronger` requires reflexivity and transitivity. Without them "strictly
+stronger" does not compose and a chain of improvements cannot be certified as a
+single one.
+
+**Declaration idiom.** Declare a family with `abbrev`, not `def`. `Stronger` and
+`claim` are structure fields, so `myFamily.Stronger a b` reduces to the intended
+relation only when `myFamily` is reducible; behind a plain `def`, `omega` and
+`decide` see an opaque atom and fail. This is the same projection-reducibility
+hazard noted for frontiers in §7.4, and it applies wherever a `Type`- or
+`Prop`-valued field is projected in user code.
+
 ### 10.3 Optional certified root-bound evaluator
 
 A later phase may attach fallback bounds to every branch and compose them by exact `sum`, `max`, or product lemmas, producing a valid root upper bound even before the threshold is reached.
