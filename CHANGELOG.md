@@ -187,6 +187,37 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-08` — feat: let the gate scripts target downstream projects; add axiom check to promotion
+
+Two defects.
+
+**1. The scripts could not reach the code they exist to check.**
+`crrg-seal`, `crrg-lineage` and `crrg-promote-check` hardcoded `import CRRG` and
+`cd "$CRRG_ROOT"`, while their own usage text advertised downstream targets:
+
+```text
+Example: crrg-promote-check MyProject.E17 MyProject.Candidates.E17Target
+```
+
+Since CRRG "must never import" project vocabulary (§2.1), a downstream
+declaration is by construction not in scope after `import CRRG`, so the one job
+these scripts exist for was impossible. Added `CRRG_IMPORTS`, `CRRG_WORKDIR` and
+`CRRG_AUDIT_NAMESPACES` so each script can run inside a downstream Lake project
+against its own modules.
+
+**2. `crrg-promote-check` had no axiom step.** It verified only that the
+theorem inhabits the target type, so a `sorry`-backed proof passed (see
+`CHG-07`). Added step 4/4: `#print axioms` on the promoting theorem, failing on
+`sorryAx` / `ofReduceBool` / `ofReduceNat` with an explicit
+`It must NOT be promoted to CERTIFIED.`
+
+`crrg-seal` additionally now prints a **seal hash** (sha256 of the exact printed
+type), which §8 (7.8) requires candidate history to record.
+
+Verified end to end against a throwaway downstream Lake project consuming CRRG:
+honest theorem → `PASSED`, `sorry`-backed theorem → `FAILED`, and the namespace
+audit catches the hole.
+
 #### `CHG-07` — feat: transitive axiom audit — **the gate previously certified `sorry`**
 
 The most serious defect found in the audit. Spec §14 item 12.2.3 requires

@@ -7,46 +7,70 @@ CRRG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 if [ $# -lt 2 ]; then
   echo "Usage: crrg-promote-check <theorem-name> <sealed-target-name>"
   echo "Example: crrg-promote-check MyProject.E17 MyProject.Candidates.E17Target"
+  echo ""
+  echo "Environment:"
+  echo "  CRRG_IMPORTS   comma-separated modules to import (default: CRRG)."
+  echo "                 Set this when checking a downstream declaration, e.g."
+  echo "                 CRRG_IMPORTS=CRRG,ProximityPrize.Squeeze.Soundness.ResearchGraph.Candidates"
+  echo "  CRRG_WORKDIR   directory whose Lake env to use (default: the CRRG repo root)."
+  echo "                 Set this to the downstream project root for downstream checks."
   exit 1
 fi
 
 THEOREM="$1"
 TARGET="$2"
 
-cd "$CRRG_ROOT"
+IMPORTS="${CRRG_IMPORTS:-CRRG}"
+WORKDIR="${CRRG_WORKDIR:-$CRRG_ROOT}"
+
+IMPORT_BLOCK=""
+IFS=',' read -ra _mods <<< "$IMPORTS"
+for m in "${_mods[@]}"; do
+  m="$(echo "$m" | tr -d '[:space:]')"
+  [ -n "$m" ] && IMPORT_BLOCK="${IMPORT_BLOCK}import ${m}"$'\n'
+done
+
+cd "$WORKDIR"
 
 echo "=== Promotion check ==="
 echo "Theorem: $THEOREM"
 echo "Target:  $TARGET"
+echo "Imports: $IMPORTS"
+echo "Workdir: $WORKDIR"
 echo ""
 
-TMPFILE="${CRRG_ROOT}/.crrg_promote_tmp_$$.lean"
+TMPFILE="${WORKDIR}/.crrg_promote_tmp_$$.lean"
 trap 'rm -f "$TMPFILE"' EXIT
 
-echo "[1/3] Verifying theorem exists..."
-cat > "$TMPFILE" <<LEAN
-import CRRG
-#check @$THEOREM
-LEAN
+echo "[1/4] Verifying theorem exists..."
+printf '%s#check @%s\n' "$IMPORT_BLOCK" "$THEOREM" > "$TMPFILE"
 lake env lean "$TMPFILE"
 
 echo ""
-echo "[2/3] Verifying target declaration exists..."
-cat > "$TMPFILE" <<LEAN
-import CRRG
-#check @$TARGET
-LEAN
+echo "[2/4] Verifying target declaration exists..."
+printf '%s#check @%s\n' "$IMPORT_BLOCK" "$TARGET" > "$TMPFILE"
 lake env lean "$TMPFILE"
 
 echo ""
-echo "[3/3] Type-link check (theorem inhabits sealed target)..."
-cat > "$TMPFILE" <<LEAN
-import CRRG
-example : $TARGET := $THEOREM
-LEAN
+echo "[3/4] Type-link check (theorem inhabits sealed target)..."
+printf '%sexample : %s := %s\n' "$IMPORT_BLOCK" "$TARGET" "$THEOREM" > "$TMPFILE"
 lake env lean "$TMPFILE"
+
+echo ""
+echo "[4/4] Axiom audit on the promoting theorem..."
+printf '%s#print axioms %s\n' "$IMPORT_BLOCK" "$THEOREM" > "$TMPFILE"
+AXIOMS_OUT="$(lake env lean "$TMPFILE")"
+echo "$AXIOMS_OUT"
+if echo "$AXIOMS_OUT" | grep -qE 'sorryAx|ofReduceBool|ofReduceNat'; then
+  echo ""
+  echo "=== Promotion check FAILED ==="
+  echo "The theorem depends on a banned axiom (sorry / native decide)."
+  echo "It must NOT be promoted to CERTIFIED."
+  exit 1
+fi
 
 echo ""
 echo "=== Promotion check PASSED ==="
-echo "The theorem inhabits the exact sealed target proposition."
+echo "The theorem inhabits the exact sealed target proposition"
+echo "and depends on no banned axioms."
 echo "Proceed with candidate promotion to CERTIFIED status."

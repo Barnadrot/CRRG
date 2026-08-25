@@ -7,21 +7,30 @@ CRRG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 if [ $# -lt 1 ]; then
   echo "Usage: crrg-lineage <declaration-name>"
   echo "Example: crrg-lineage CRRG.WitnessMap.closed_parent"
+  echo ""
+  echo "Environment:"
+  echo "  CRRG_IMPORTS   comma-separated modules to import (default: CRRG)"
+  echo "  CRRG_WORKDIR   Lake project root to run in (default: the CRRG repo root)"
   exit 1
 fi
 
 DECL="$1"
+IMPORTS="${CRRG_IMPORTS:-CRRG}"
+WORKDIR="${CRRG_WORKDIR:-$CRRG_ROOT}"
 
-cd "$CRRG_ROOT"
+cd "$WORKDIR"
 
 echo "=== Axiom lineage for: $DECL ==="
 
-TMPFILE="${CRRG_ROOT}/.crrg_lineage_tmp_$$.lean"
+TMPFILE="${WORKDIR}/.crrg_lineage_tmp_$$.lean"
 trap 'rm -f "$TMPFILE"' EXIT
-cat > "$TMPFILE" <<LEAN
-import CRRG
-#print axioms $DECL
-LEAN
+: > "$TMPFILE"
+IFS=',' read -ra _mods <<< "$IMPORTS"
+for m in "${_mods[@]}"; do
+  m="$(echo "$m" | tr -d '[:space:]')"
+  [ -n "$m" ] && echo "import $m" >> "$TMPFILE"
+done
+echo "#print axioms $DECL" >> "$TMPFILE"
 lake env lean "$TMPFILE"
 
 echo "=== End lineage ==="

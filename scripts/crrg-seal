@@ -7,27 +7,45 @@ CRRG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 if [ $# -lt 1 ]; then
   echo "Usage: crrg-seal <candidate-declaration-name>"
   echo "Example: crrg-seal MyProject.Candidates.E17Target"
+  echo ""
+  echo "Environment:"
+  echo "  CRRG_IMPORTS   comma-separated modules to import (default: CRRG)"
+  echo "  CRRG_WORKDIR   Lake project root to run in (default: the CRRG repo root)"
   exit 1
 fi
 
 DECL="$1"
+IMPORTS="${CRRG_IMPORTS:-CRRG}"
+WORKDIR="${CRRG_WORKDIR:-$CRRG_ROOT}"
 
-cd "$CRRG_ROOT"
+cd "$WORKDIR"
 
 echo "=== Seal check for: $DECL ==="
 echo ""
-echo "Verifying declaration exists and printing its type..."
+echo "Verifying declaration exists and printing its exact type..."
 
-TMPFILE="${CRRG_ROOT}/.crrg_seal_tmp_$$.lean"
+TMPFILE="${WORKDIR}/.crrg_seal_tmp_$$.lean"
 trap 'rm -f "$TMPFILE"' EXIT
-cat > "$TMPFILE" <<LEAN
-import CRRG
-#check @$DECL
-LEAN
-lake env lean "$TMPFILE"
+: > "$TMPFILE"
+IFS=',' read -ra _mods <<< "$IMPORTS"
+for m in "${_mods[@]}"; do
+  m="$(echo "$m" | tr -d '[:space:]')"
+  [ -n "$m" ] && echo "import $m" >> "$TMPFILE"
+done
+{
+  echo "#check @$DECL"
+  echo "#print axioms $DECL"
+} >> "$TMPFILE"
+SEAL_OUT="$(lake env lean "$TMPFILE")"
+echo "$SEAL_OUT"
+
+echo ""
+echo "Seal hash (sha256 of the printed type, for the candidate record):"
+echo "$SEAL_OUT" | grep -v '^.*depends on axioms' | sha256sum | cut -d' ' -f1
 
 echo ""
 echo "=== End seal check ==="
 echo ""
 echo "If the type above is the exact proposition you intend to seal,"
-echo "record it as a SealedCandidate in the downstream graph adapter."
+echo "record it, together with the seal hash, as a SealedCandidate in the"
+echo "downstream graph adapter. A sealed target may never be weakened in place."
