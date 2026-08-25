@@ -187,6 +187,39 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-09` — feat: leaf-preserving frontier refinement and retirement
+
+`Frontier.compose` carried this doc-comment:
+
+> if the root of `inner` matches a leaf of `outer`, the combined frontier
+> replaces that leaf with `inner`'s leaves.
+
+It does not. Its result's task set is exactly `inner.Task`; every other leaf of
+the outer frontier is discarded. The operation is *sound* — it still demands an
+`Edge root mid` and `inner.closeRoot` — but it is whole-root re-rooting, not
+leaf-wise refinement, so §7 (6.4)'s "preserve all other leaves" had no
+implementation and acceptance criterion 5 could not be demonstrated.
+
+Corrected the doc-comment and added three sibling-preserving operations:
+
+- `Frontier.refineLeaf` — replace one leaf by a sufficient child via an `Edge`
+  (§7 6.4);
+- `Frontier.splitLeaf` — replace one leaf by a `Split`'s branches; the new task
+  set is `{t // t ≠ t₀} ⊕ s.Branch`, so siblings survive and the split's
+  coverage proof is structurally required (§7 6.4, §12 10.1);
+- `Frontier.retireLeaf` — drop a leaf from the live frontier, requiring an
+  actual proof of it. Retirement is therefore never a bookkeeping deletion
+  (§12 10.3).
+
+**Design note.** These take `DecidableEq F.Task` as an *explicit* argument
+rather than an instance. Instance search runs at `instances` transparency and
+will not unfold a frontier declared with a plain `def`, which is exactly how
+downstream adapters will declare theirs (`def current971426 : Frontier ...`).
+The instance-implicit version failed with `failed to synthesize DecidableEq
+base.Task` on precisely the intended usage; the explicit argument unifies at
+default transparency and works. Callers pass
+`inferInstanceAs (DecidableEq MyTask)`.
+
 #### `CHG-08` — feat: let the gate scripts target downstream projects; add axiom check to promotion
 
 Two defects.
