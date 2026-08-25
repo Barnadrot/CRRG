@@ -17,6 +17,9 @@ CRRG makes proof decompositions visible to the Lean 4 kernel, providing exact lo
 | `GuardedMap` | Guard-based split retaining both pass and fail branches |
 | `EscapeMap` | Two-way split for normal vs exceptional outcomes |
 | `Frontier` | The live set of obligations closing the root |
+| `Frontier.refineLeaf` | Replace one leaf via an `Edge`, preserving siblings |
+| `Frontier.splitLeaf` | Replace one leaf by a `Split`'s branches, preserving siblings |
+| `Frontier.retireLeaf` | Drop a leaf from the live frontier — requires a real proof |
 | `CandidateEdge` | Typed promotion queue entry with exact Lean proposition |
 | `SealedCandidate` | Immutable candidate target for promotion attempts |
 
@@ -24,8 +27,9 @@ CRRG makes proof decompositions visible to the Lean 4 kernel, providing exact lo
 
 ```
 CRRG/
-  CRRG/           Core library modules
-  Test/Synthetic/  Unit tests for each primitive
+  CRRG/            Core library modules
+  Test/Support/    Test harness (#expect_failure)
+  Test/Synthetic/  Unit tests for each primitive, incl. asserted rejections
   scripts/         Build, audit, and promotion scripts
   Spec.md          Full specification
   AGENTS.md        Agent interaction contract
@@ -36,9 +40,13 @@ CRRG/
 Requires Lean 4 v4.30.0 (via elan).
 
 ```bash
-lake build CRRG    # build the library
-lake build Test    # build and check all tests
+lake build CRRG        # build the library
+lake build Test        # build and check all tests (incl. negative tests)
+scripts/crrg-check     # full gate: library + tests + declarations + axiom audit
 ```
+
+Note that `lake build` with no target builds only the `CRRG` library. CI must run
+`scripts/crrg-check` (or `lake build Test` explicitly) to execute the tests.
 
 ## Integration
 
@@ -52,15 +60,25 @@ CRRG never imports project-specific mathematics. The downstream project owns its
 
 ## Scripts
 
-- `scripts/crrg-check` — build + test + axiom audit
+- `scripts/crrg-check` — build + tests + declaration audit + transitive axiom audit
+- `scripts/crrg-audit` — transitive axiom audit alone (Spec 12.2 item 3)
 - `scripts/crrg-status` — human-readable state summary
 - `scripts/crrg-lineage` — print axiom dependencies of a declaration
-- `scripts/crrg-seal` — validate a candidate declaration before sealing
-- `scripts/crrg-promote-check` — verify a theorem inhabits a sealed target
+- `scripts/crrg-seal` — print a candidate's exact type and seal hash before sealing
+- `scripts/crrg-promote-check` — verify a theorem inhabits a sealed target *and*
+  depends on no banned axiom
+
+All scripts default to auditing CRRG itself. To point them at a downstream
+ResearchGraph adapter:
+
+```bash
+CRRG_WORKDIR=/path/to/proximity-research CRRG_IMPORTS=ProximityPrize.Squeeze.Soundness.ResearchGraph.Current CRRG_AUDIT_NAMESPACES=ProximityPrize   scripts/crrg-promote-check MyProject.E17 MyProject.Candidates.E17Target
+```
 
 ## Trust model
 
 - Every edge is a Lean theorem (no prose-only arrows)
+- No certified edge or promoted candidate may depend on `sorry`
 - Every split proves coverage
 - Guards produce sibling branches (never silently dropped)
 - Exceptions are never deleted

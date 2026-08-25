@@ -11,6 +11,8 @@ When assigned a task, an agent gets:
 3. **Allowed imports / writable files.**
 4. **Sibling assumptions** — only previously proved theorem constants, never prose facts.
 5. **Success condition** — kernel compilation + axiom audit + exact type-link.
+   All three are checked by `scripts/crrg-promote-check`. A proof that compiles
+   but depends on `sorry` is **not** a success; the gate rejects it.
 6. **Failure output** — mathematical counterexample, impossibility theorem, or proposed split.
 
 ## Reward signal
@@ -49,7 +51,10 @@ An agent may be assigned a SEALED_UNVERIFIED candidate. The exact proposition is
 
 ## Graph mutations
 
-To refine a leaf into children, the agent must provide a `Split` or `WitnessSplit` with a compiled coverage theorem in the same commit. The orchestrator will not assign children as independent tasks until the refinement builds.
+To refine a leaf into children, the agent must provide a `Split` or `WitnessSplit` with a compiled coverage theorem in the same commit, and apply it with `Frontier.splitLeaf` so that every sibling leaf is preserved. The orchestrator will not assign children as independent tasks until the refinement builds.
+
+Retiring a route uses `Frontier.retireLeaf`, which requires an actual proof of
+the leaf. Removing an obligation is never a bookkeeping edit.
 
 ## CRRG as dependency
 

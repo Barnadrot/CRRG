@@ -49,8 +49,8 @@ the staged implementation plan (§15). Do not reconcile the two.
 | 2.2 | Standalone repository layout | DONE | `SPEC-04` |
 | 2.2 | Core is dependency-light (Lean core only) | DONE | `DEV-01` |
 | 2.2 | `Test/YukonReplay/` fixture | DEFERRED | Stage B |
-| 2.3 | Downstream adapter shape | DONE | `CHG-14` |
-| 2.4 | Sibling-checkout development builds | DONE | `CHG-14` |
+| 2.3 | Downstream adapter shape | DONE | `CHG-08` |
+| 2.4 | Sibling-checkout development builds | DONE | `CHG-08` |
 | 2.4 | Pinned-SHA integration builds | DEFERRED | needs a published CRRG SHA |
 
 ### §5 (4.x) Trust model
@@ -72,7 +72,7 @@ the staged implementation plan (§15). Do not reconcile the two.
 | 5.1 | `Edge` universe explicit, not inferred | MISSING | inferred `Prop`; a later data field silently changes it |
 | 5.2 | `Split` with coverage proof | DONE | |
 | 5.3 | `BadNode`, `BadNode.Closed` | DONE | `DEV-01` |
-| 5.3 | `WitnessMap`, `WitnessSplit`, `closed_parent` | DONE | `CHG-11` |
+| 5.3 | `WitnessMap`, `WitnessSplit`, `closed_parent` | DONE | `CHG-10` |
 | 5.3 | Witness / branch / task types universe-polymorphic | MISSING | pinned to `Type 0` |
 | 5.4 | `EscapeMap` | DONE | |
 | 5.5 | `GuardedMap` consuming both truth values | DONE | |
@@ -83,8 +83,8 @@ the staged implementation plan (§15). Do not reconcile the two.
 |-----|-------------|--------|-----|
 | 6.1–6.2 | Exact root goal and root seam | DOWNSTREAM | |
 | 6.3 | `Frontier` package | DONE | |
-| 6.4 | Replace one leaf by a child via `Edge`, siblings preserved | DONE | `CHG-10` |
-| 6.4 | Replace one leaf by children via `Split`, siblings preserved | DONE | `CHG-10` |
+| 6.4 | Replace one leaf by a child via `Edge`, siblings preserved | DONE | `CHG-09` |
+| 6.4 | Replace one leaf by children via `Split`, siblings preserved | DONE | `CHG-09` |
 
 ### §8 (7.x) Typed candidate graph and promotion queue
 
@@ -98,7 +98,7 @@ the staged implementation plan (§15). Do not reconcile the two.
 | 7.5 | Sealed target immutable for the attempt | PARTIAL | convention, not enforced |
 | 7.6 | Promotion is not prize progress | DONE | no aggregate is emitted |
 | 7.7 | Certified frontier rendered separately from the promotion queue | MISSING | no renderer |
-| 7.8 | History: seal hash, commit, timestamp, status, reason | PARTIAL | seal hash only, `CHG-09` |
+| 7.8 | History: seal hash, commit, timestamp, status, reason | PARTIAL | seal hash only, `CHG-08` |
 
 ### §9 LDB counterexample vocabulary
 
@@ -127,9 +127,9 @@ the staged implementation plan (§15). Do not reconcile the two.
 
 | Req | Requirement | Status | Ref |
 |-----|-------------|--------|-----|
-| 10.1 | Refinement requires a compiled coverage theorem | DONE | `CHG-10` |
+| 10.1 | Refinement requires a compiled coverage theorem | DONE | `CHG-09` |
 | 10.2 | Invalid refinements rejected | PARTIAL | list not exhausted |
-| 10.3 | Retirement removes from the live frontier | DONE | `CHG-10` |
+| 10.3 | Retirement removes from the live frontier | DONE | `CHG-09` |
 
 ### §14 (12.x) Verification integration
 
@@ -137,7 +137,7 @@ the staged implementation plan (§15). Do not reconcile the two.
 |-----|-------------|--------|-----|
 | 12.2.1 | Build the live graph and every registered closed-task module | DONE | `crrg-check` |
 | 12.2.2 | Reject banned constructs | MISSING | no banned-construct scan |
-| 12.2.3 | Transitive `collectAxioms` over the live graph | DONE | `CHG-08` |
+| 12.2.3 | Transitive `collectAxioms` over the live graph | DONE | `CHG-07` |
 | 12.2.4 | Type-link the root exactly | DONE | `Frontier.rootIs` |
 | 12.2.5 | Type-link each task theorem exactly | DONE | `Frontier.leafIs` |
 | 12.2.6 | Print only `OPEN` / `CLOSED` / `INVALID` per task | MISSING | no task-status renderer |
@@ -150,12 +150,12 @@ the staged implementation plan (§15). Do not reconcile the two.
 |-----|-------------|--------|-----|
 | A.1 | Direct `Edge` composition | DONE | |
 | A.2 | Exhaustive `Split` | DONE | |
-| A.3 | Witness-level `WitnessSplit` | DONE | `CHG-11` |
+| A.3 | Witness-level `WitnessSplit` | DONE | `CHG-10` |
 | A.4 | Guarded refinement, failed guard explicit | DONE | |
 | A.5 | Escape refinement, exception explicit | DONE | |
-| A.6 | Route retirement without deleting lineage | DONE | `CHG-11` |
-| A.7 | DAG reuse: one theorem discharges multiple parents | DONE | `CHG-11` |
-| A.8 | Negative tests for missing branches and weakened children | DONE | `CHG-07` |
+| A.6 | Route retirement without deleting lineage | DONE | `CHG-10` |
+| A.7 | DAG reuse: one theorem discharges multiple parents | DONE | `CHG-10` |
+| A.8 | Negative tests for missing branches and weakened children | DONE | `CHG-06` |
 
 Stages B–G are out of scope for the current work and remain `DEFERRED`.
 
@@ -186,6 +186,26 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
+
+#### `CHG-11` — docs: bring `README.md`, `AGENTS.md` and `crrg-status` in line
+
+`README.md` documented `crrg-check` as performing an "axiom audit" that did not
+exist until `CHG-07`, and `AGENTS.md` promised agents an axiom audit as part of
+the success condition. Both are now accurate. Adds the new refinement API to the
+primitives table, documents the downstream-targeting environment variables, and
+notes that a bare `lake build` builds only the `CRRG` library — CI must call
+`scripts/crrg-check` or `lake build Test` explicitly, or the tests never run.
+
+`crrg-status` now lists the new test modules, reports the axiom-audit result,
+counts asserted rejections, and no longer leaks `lake` build output into its
+summary.
+
+Also reconciles the `CHG-nn` references in the section 1 matrix with the numbers
+actually used in section 2.
+
+**Phase 1 complete.** The as-delivered baseline is now a repository that builds,
+tests itself, and enforces the trust model it claims. `scripts/crrg-check`
+passes from a clean tree.
 
 #### `CHG-10` — test: cover the three unimplemented Stage A items
 

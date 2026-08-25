@@ -30,7 +30,9 @@ done
 echo ""
 
 echo "Test modules:"
-for f in Test/Synthetic/Edge.lean Test/Synthetic/Split.lean \
+for f in Test/Support/ExpectFailure.lean \
+         Test/Synthetic/Edge.lean Test/Synthetic/Witness.lean \
+         Test/Synthetic/Split.lean Test/Synthetic/Refinement.lean \
          Test/Synthetic/Guarded.lean Test/Synthetic/Escape.lean \
          Test/Synthetic/CandidateSeal.lean Test/Synthetic/NegativeTests.lean; do
   if [ -f "$f" ]; then
@@ -42,17 +44,29 @@ done
 echo ""
 
 echo "Build status:"
-if lake build CRRG 2>/dev/null; then
+if lake build CRRG >/dev/null 2>&1; then
   echo "  CRRG library: OK"
 else
   echo "  CRRG library: FAILED"
 fi
 
-if lake build Test 2>/dev/null; then
+if lake build Test >/dev/null 2>&1; then
   echo "  Test suite: OK"
 else
   echo "  Test suite: FAILED"
 fi
+
+echo ""
+echo "Axiom audit:"
+if "$SCRIPT_DIR/crrg-audit" >/dev/null 2>&1; then
+  echo "  no banned axiom dependencies"
+else
+  echo "  FAILED - banned axiom dependency present (run scripts/crrg-check)"
+fi
+
+echo ""
+echo "Negative tests (constructions that MUST be rejected):"
+echo "  $(grep -c '^#expect_failure' Test/Synthetic/*.lean | awk -F: '{s+=$2} END {print s}') asserted rejections"
 
 echo ""
 echo "=== End Status ==="
