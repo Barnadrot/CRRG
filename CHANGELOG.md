@@ -187,6 +187,26 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-05` — test: add the `#expect_failure` negative-test harness
+
+Spec acceptance criterion 8 requires the gate to **reject** a deliberately
+weakened child statement or a missing branch. Lean has no built-in way to assert
+that a command fails without matching its exact error text, which is brittle
+across toolchain versions.
+
+`Test/Support/ExpectFailure.lean` adds a `#expect_failure <command>` elaborator
+that succeeds exactly when the wrapped command is rejected, and raises
+`"the command was ACCEPTED but should have been rejected"` when it is not. It
+restores the environment and message log afterwards, so a rejected declaration
+leaves no trace.
+
+Verified in both directions before use: it passes on an ill-typed command, fails
+on a well-typed one, and a rejected `def` is genuinely absent from the
+environment afterwards (not silently added as `sorry`).
+
+This introduces `import Lean` into the **test** library only. The `CRRG` core
+library remains Lean-core-only.
+
 #### `CHG-04` — fix: make `BadNode` test fixtures reducible — **build is green from here**
 
 `Test/Synthetic/{Guarded,Escape}.lean` declared their fixtures as
