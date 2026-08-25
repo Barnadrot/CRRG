@@ -1,4 +1,6 @@
 import Test.Synthetic.Edge
+import Test.Synthetic.Witness
+import Test.Synthetic.Refinement
 import Test.Synthetic.Split
 import Test.Synthetic.Guarded
 import Test.Synthetic.Escape

@@ -187,6 +187,36 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-10` — test: cover the three unimplemented Stage A items
+
+Spec §15 Stage A lists eight primitives to validate in isolation. Three had no
+test at all:
+
+- **A.3 witness-level `WitnessSplit`** — and more seriously, `WitnessMap` was
+  *entirely untested*: neither `id`, `trans`, `closed_parent` nor `toEdge` was
+  exercised anywhere in the suite.
+- **A.7 DAG reuse** — one theorem discharging multiple parents, which is the
+  structural claim that makes the graph a DAG rather than a tree.
+- **A.6 route retirement without deleting historical lineage.**
+
+Adds `Test/Synthetic/Witness.lean` (A.3, A.7): witness maps as rootward edges,
+`trans` composition, identity, one `sharedClosed` theorem discharging two
+distinct parents both at witness level and via `toEdge`, and an exhaustive
+sign-classifier `WitnessSplit`.
+
+Adds `Test/Synthetic/Refinement.lean` (A.6, plus acceptance criteria 5): an
+`Edge` refinement that demonstrably leaves the sibling leaf untouched, a
+two-child `splitLeaf`, retirement leaving the historical edge still
+type-checking, and two further asserted rejections — a split without a coverage
+proof, and retirement of an unproved leaf.
+
+The refinement fixtures use ordinary `def` rather than `abbrev` deliberately, to
+exercise the explicit-decidability API from `CHG-09` under the same conditions a
+downstream adapter will.
+
+Stage A is complete at this commit: 8 of 8 items covered, 13 asserted
+rejections in total.
+
 #### `CHG-09` — feat: leaf-preserving frontier refinement and retirement
 
 `Frontier.compose` carried this doc-comment:
