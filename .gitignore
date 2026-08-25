@@ -2,3 +2,4 @@
 lake-packages/
 .crrg_*_tmp_*.lean
 lake-manifest.json
+probe*.lean
