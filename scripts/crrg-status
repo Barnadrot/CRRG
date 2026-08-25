@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Print a human-readable summary of the CRRG state.
+# For the standalone library this checks build status and lists
+# available primitives. Downstream adapters extend this with
+# project-specific frontier rendering.
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CRRG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+echo "=== CRRG Status ==="
+echo "Repository: $CRRG_ROOT"
+echo "Branch: $(cd "$CRRG_ROOT" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'unknown')"
+echo "Commit: $(cd "$CRRG_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+echo ""
+
+cd "$CRRG_ROOT"
+
+echo "Core modules:"
+for f in CRRG/Basic.lean CRRG/Split.lean CRRG/Witness.lean \
+         CRRG/Guarded.lean CRRG/Escape.lean CRRG/Frontier.lean \
+         CRRG/Candidate.lean CRRG/Audit.lean; do
+  if [ -f "$f" ]; then
+    echo "  $f: present"
+  else
+    echo "  $f: MISSING"
+  fi
+done
+echo ""
+
+echo "Test modules:"
+for f in Test/Synthetic/Edge.lean Test/Synthetic/Split.lean \
+         Test/Synthetic/Guarded.lean Test/Synthetic/Escape.lean \
+         Test/Synthetic/CandidateSeal.lean Test/Synthetic/NegativeTests.lean; do
+  if [ -f "$f" ]; then
+    echo "  $f: present"
+  else
+    echo "  $f: MISSING"
+  fi
+done
+echo ""
+
+echo "Build status:"
+if lake build CRRG 2>/dev/null; then
+  echo "  CRRG library: OK"
+else
+  echo "  CRRG library: FAILED"
+fi
+
+if lake build Test 2>/dev/null; then
+  echo "  Test suite: OK"
+else
+  echo "  Test suite: FAILED"
+fi
+
+echo ""
+echo "=== End Status ==="

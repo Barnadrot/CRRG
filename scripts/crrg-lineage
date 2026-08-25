@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CRRG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [ $# -lt 1 ]; then
+  echo "Usage: crrg-lineage <declaration-name>"
+  echo "Example: crrg-lineage CRRG.WitnessMap.closed_parent"
+  exit 1
+fi
+
+DECL="$1"
+
+cd "$CRRG_ROOT"
+
+echo "=== Axiom lineage for: $DECL ==="
+
+TMPFILE="${CRRG_ROOT}/.crrg_lineage_tmp_$$.lean"
+trap 'rm -f "$TMPFILE"' EXIT
+cat > "$TMPFILE" <<LEAN
+import CRRG
+#print axioms $DECL
+LEAN
+lake env lean "$TMPFILE"
+
+echo "=== End lineage ==="
