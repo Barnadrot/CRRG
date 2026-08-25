@@ -1,0 +1,36 @@
+
+open Lean Elab Command
+
+/-- Axioms that disqualify a declaration from CRRG certification. -/
+def crrgBannedAxioms : List Name :=
+  [``sorryAx, ``Lean.ofReduceBool, ``Lean.ofReduceNat]
+
+/-- Axioms that are permitted (classical logic is fine; holes are not). -/
+def crrgAllowedAxioms : List Name :=
+  [``propext, ``Classical.choice, ``Quot.sound]
+
+run_cmd do
+  let nsRaw := (← IO.getEnv "CRRG_AUDIT_NAMESPACES").getD "CRRG"
+  let namespaces : List Name :=
+    (nsRaw.splitOn ",").filterMap fun s =>
+      let s := s.trimAscii.toString
+      if s.isEmpty then none else some s.toName
+  let env ← getEnv
+  let mut checked := 0
+  let mut bad : Array (Name × Name) := #[]
+  let mut unknown : Array (Name × Name) := #[]
+  for (n, _) in env.constants.toList do
+    if n.isInternal then continue
+    unless namespaces.any (fun ns => ns.isPrefixOf n) do continue
+    checked := checked + 1
+    for a in (← Lean.collectAxioms n) do
+      if crrgBannedAxioms.contains a then
+        bad := bad.push (n, a)
+      else if !crrgAllowedAxioms.contains a then
+        unknown := unknown.push (n, a)
+  logInfo s!"CRRG axiom audit: namespaces={namespaces}, declarations checked={checked}"
+  unless unknown.isEmpty do
+    logWarning s!"declarations depending on non-standard axioms: {unknown}"
+  unless bad.isEmpty do
+    throwError s!"CRRG AXIOM AUDIT FAILED — banned axiom dependencies: {bad}"
+  logInfo "CRRG axiom audit PASSED — no banned axiom dependencies."

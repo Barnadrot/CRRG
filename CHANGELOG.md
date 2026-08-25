@@ -187,6 +187,38 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-07` — feat: transitive axiom audit — **the gate previously certified `sorry`**
+
+The most serious defect found in the audit. Spec §14 item 12.2.3 requires
+transitive `collectAxioms` over the live graph; `AGENTS.md` states the success
+condition as "kernel compilation + axiom audit + exact type-link"; `README.md`
+described `crrg-check` as "build + test + axiom audit".
+
+**No axiom audit existed.** `lake build` only *warns* on `sorry`, and neither
+gate script inspected axioms. This was demonstrated by planting
+`theorem demoPromotion : DemoTarget := sorry` in the library:
+
+```text
+crrg-check           -> PASSED
+crrg-promote-check   -> PASSED
+                        "Proceed with candidate promotion to CERTIFIED status."
+```
+
+An agent could therefore have earned a promotion reward for a hole, which
+defeats the premise of the entire system.
+
+Adds `scripts/crrg-audit` plus the elaborator body
+`scripts/axiom_audit_body.lean.in`. It enumerates every non-internal declaration
+in the audited namespaces and runs `Lean.collectAxioms` on each:
+
+- **banned:** `sorryAx`, `Lean.ofReduceBool`, `Lean.ofReduceNat` — audit fails;
+- **allowed:** `propext`, `Classical.choice`, `Quot.sound` — classical logic is
+  fine, holes and native `decide` are not;
+- anything else is reported as a warning rather than silently accepted.
+
+Wired in as `crrg-check` step 4/4. Verified to fail on the planted `sorry` and
+to pass on the clean tree: 229 CRRG declarations, zero banned dependencies.
+
 #### `CHG-06` — test: replace the negative-test commentary with 11 asserted rejections
 
 `Test/Synthetic/NegativeTests.lean` previously contained **no negative tests**.

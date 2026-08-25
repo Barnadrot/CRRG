@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Transitive axiom audit (Spec 12.2 item 3, 12.3).
+#
+# Fails if any declaration in the audited namespaces transitively depends on a
+# banned axiom (`sorryAx`, native-decide). Works for CRRG itself and, via
+# CRRG_IMPORTS / CRRG_WORKDIR, for a downstream ResearchGraph adapter.
+#
+# Environment:
+#   CRRG_IMPORTS            comma-separated modules to import (default: CRRG)
+#   CRRG_AUDIT_NAMESPACES   comma-separated namespaces to audit (default: CRRG)
+#   CRRG_WORKDIR            Lake project root to run in (default: CRRG repo root)
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CRRG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+IMPORTS="${CRRG_IMPORTS:-CRRG}"
+WORKDIR="${CRRG_WORKDIR:-$CRRG_ROOT}"
+export CRRG_AUDIT_NAMESPACES="${CRRG_AUDIT_NAMESPACES:-CRRG}"
+
+cd "$WORKDIR"
+
+TMPFILE="${WORKDIR}/.crrg_audit_tmp_$$.lean"
+trap 'rm -f "$TMPFILE"' EXIT
+
+echo "import Lean" > "$TMPFILE"
+IFS=',' read -ra _mods <<< "$IMPORTS"
+for m in "${_mods[@]}"; do
+  m="$(echo "$m" | tr -d '[:space:]')"
+  [ -n "$m" ] && echo "import $m" >> "$TMPFILE"
+done
+cat "$SCRIPT_DIR/axiom_audit_body.lean.in" >> "$TMPFILE"
+
+lake env lean "$TMPFILE"
