@@ -87,39 +87,54 @@ crrg/
   lakefile.lean
   lean-toolchain
 
-  CRRG/
-    Basic.lean
-    Edge.lean
+  CRRG/                        -- core library: Lean core only, no Mathlib
+    Basic.lean                 -- Goal, Edge
     Split.lean
-    Witness.lean
+    Witness.lean               -- BadNode, WitnessMap, WitnessSplit
     Guarded.lean
     Escape.lean
-    Frontier.lean
+    Frontier.lean              -- Frontier + refineLeaf / splitLeaf / retireLeaf
     Candidate.lean
-    Audit.lean
+    Audit.lean                 -- type-link helpers
 
-  Test/
+  Test/                        -- test library: may depend on Mathlib
+    Support/
+      ExpectFailure.lean       -- #expect_failure negative-test harness
     Synthetic/
       Edge.lean
+      Witness.lean
       Split.lean
+      Refinement.lean
       Guarded.lean
       Escape.lean
       CandidateSeal.lean
       NegativeTests.lean
 
-    YukonReplay/
+    YukonReplay/               -- Stage B; not present until Stage A is complete
       ... integration fixture / adapter ...
 
   scripts/
-    crrg-check
+    crrg-check                 -- build + tests + declarations + axiom audit
+    crrg-audit                 -- transitive collectAxioms gate (§14.2 item 3)
+    axiom_audit_body.lean.in   -- elaborator body used by crrg-audit
     crrg-status
     crrg-lineage
     crrg-seal
     crrg-promote-check
 
+  CHANGELOG.md                 -- conformance matrix and audit trail
   AGENTS.md
   README.md
 ```
+
+`Edge` lives in `Basic.lean` beside `Goal` rather than in its own file: an edge
+is meaningless without a goal, and §13's pilot layout likewise groups them.
+
+The **core library** must remain Lean-core-only. The **test library** may take
+additional dependencies, including Mathlib, because nothing downstream links
+against it; a test-only dependency does not constrain a consumer's version
+resolution. This split is what lets the synthetic fixtures use `ℚ` and other
+Mathlib structure while the shipped semantics stay dependency-free.
 
 The generic core should be as dependency-light as practical. Prefer Lean core types and logic where sufficient. Avoid creating an unnecessary independent Mathlib-version constraint merely for basic CRRG semantics.
 
@@ -579,14 +594,43 @@ def current971426 : Frontier target971426 where
 
 ### 7.4 Refinement
 
-Provide generic frontier refinement later, after the pilot:
+Generic, leaf-preserving frontier refinement is **normative**, not deferred. A
+refinement must:
 
 - replace one leaf by a single child using an `Edge`;
 - replace one leaf by multiple children using a `Split`;
-- preserve all other leaves;
+- **preserve all other leaves**;
 - derive the new `closeRoot` automatically.
 
-For v0.2 this can be manual if dependent-index manipulation becomes a time sink. Correctness of `closeRoot` matters more than elegance.
+```lean
+def Frontier.refineLeaf {root : Goal} (F : Frontier root) (dec : DecidableEq F.Task)
+    (t₀ : F.Task) {child : Goal} (e : Edge (F.leaf t₀) child) : Frontier root
+
+def Frontier.splitLeaf {root : Goal} (F : Frontier root) (dec : DecidableEq F.Task)
+    (t₀ : F.Task) (s : Split (F.leaf t₀)) : Frontier root
+
+def Frontier.retireLeaf {root : Goal} (F : Frontier root) (dec : DecidableEq F.Task)
+    (t₀ : F.Task) (proof : (F.leaf t₀).claim) : Frontier root
+```
+
+`splitLeaf`'s new task set is `{t : F.Task // t ≠ t₀} ⊕ s.Branch`: the siblings
+survive as the left summand and the coverage proof carried by `s` is
+structurally required, which is what makes §12.1 enforceable rather than
+advisory.
+
+`retireLeaf` implements §12.3. It demands an actual proof of the retired leaf, so
+removing an obligation from the live frontier can never be a bookkeeping edit.
+
+**Do not use `Frontier.compose` for leaf refinement.** It re-roots an entire
+frontier through an `Edge` and its result carries only the inner frontier's
+leaves; every sibling of the outer frontier is discarded. It is sound but it is
+not a refinement operator.
+
+**Decidability is an explicit argument, not an instance.** Instance resolution
+runs at `instances` transparency and will not unfold a frontier declared with a
+plain `def` — which is exactly how downstream adapters declare theirs — so
+`[DecidableEq F.Task]` fails to synthesize on the intended usage. Callers pass
+`inferInstanceAs (DecidableEq MyTask)`.
 
 ---
 

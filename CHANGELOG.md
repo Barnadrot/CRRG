@@ -187,6 +187,29 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `SPEC-04` — spec: describe the built repository layout and make refinement normative
+
+**§2.2 layout.** Updated to the actual tree: `Edge` lives in `Basic.lean` beside
+`Goal` (an edge is meaningless without a goal, and §13's pilot layout groups them
+the same way), `Test/Support/` and the new synthetic modules are listed, and
+`crrg-audit` / `axiom_audit_body.lean.in` / `CHANGELOG.md` are added. Also states
+explicitly that the **core** library is Lean-core-only while the **test** library
+may depend on Mathlib, since nothing downstream links against tests and a
+test-only dependency does not constrain a consumer's version resolution. This is
+what permits the toy fixtures to use `ℚ`.
+
+**§7.4 refinement.** Was "provide generic frontier refinement later, after the
+pilot ... for v0.2 this can be manual". It is now implemented (`CHG-09`), so the
+section is normative and carries the three signatures. Adds two things the
+original omitted:
+
+- an explicit warning **not** to use `Frontier.compose` for leaf refinement — it
+  re-roots the whole frontier and silently discards every sibling leaf, which is
+  precisely the mistake the section exists to prevent;
+- the rationale for decidability being an explicit argument rather than an
+  instance, since the instance-implicit form provably fails on the usage pattern
+  §7.3 prescribes for downstream adapters.
+
 #### `SPEC-03` — spec: mark §9 as downstream-only, resolving a direct contradiction with §2.1
 
 §2.1 states that CRRG **must never import** `Achievable`, Reed–Solomon-specific
