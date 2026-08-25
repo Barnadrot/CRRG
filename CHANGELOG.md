@@ -49,100 +49,101 @@ the staged implementation plan (§15). Do not reconcile the two.
 | 2.2 | Standalone repository layout | DONE | `SPEC-04` |
 | 2.2 | Core is dependency-light (Lean core only) | DONE | `DEV-01` |
 | 2.2 | `Test/YukonReplay/` fixture | DEFERRED | Stage B |
+| 6.6 | Projection-reducibility usage rule | DONE | `SPEC-09` |
 | 2.3 | Downstream adapter shape | DONE | `CHG-08` |
 | 2.4 | Sibling-checkout development builds | DONE | `CHG-08` |
 | 2.4 | Pinned-SHA integration builds | DEFERRED | needs a published CRRG SHA |
 
-### §5 (4.x) Trust model
+### §5 Trust model
 
 | Req | Requirement | Status | Ref |
 |-----|-------------|--------|-----|
-| 4.1 | Frozen root | DOWNSTREAM | the root is a downstream declaration |
-| 4.2 | Every edge is a Lean theorem | DONE | prose arrows are not representable |
-| 4.3 | Every split proves coverage | DONE | `Split.discharge` |
-| 4.4 | Guards produce sibling branches | DONE | `GuardedMap` |
-| 4.5 | Exceptions are never deleted | DONE | `EscapeMap` |
-| 4.6 | No synthetic global percentage | MISSING | no gate forbids emitting one |
+| 5.1 | Frozen root | DOWNSTREAM | the root is a downstream declaration |
+| 5.2 | Every edge is a Lean theorem | DONE | prose arrows are not representable |
+| 5.3 | Every split proves coverage | DONE | `Split.discharge` |
+| 5.4 | Guards produce sibling branches | DONE | `GuardedMap` |
+| 5.5 | Exceptions are never deleted | DONE | `EscapeMap` |
+| 5.6 | No synthetic global percentage | DONE | `CHG-16` — structural, `render_length` |
 
-### §6 (5.x) Lean API
-
-| Req | Requirement | Status | Ref |
-|-----|-------------|--------|-----|
-| 5.1 | `Goal`, `Goal.Proved`, `Edge`, `Edge.id/trans` | DONE | |
-| 5.1 | `Edge` universe explicit, not inferred | MISSING | inferred `Prop`; a later data field silently changes it |
-| 5.2 | `Split` with coverage proof | DONE | |
-| 5.3 | `BadNode`, `BadNode.Closed` | DONE | `DEV-01` |
-| 5.3 | `WitnessMap`, `WitnessSplit`, `closed_parent` | DONE | `CHG-10` |
-| 5.3 | Witness / branch / task types universe-polymorphic | MISSING | pinned to `Type 0` |
-| 5.4 | `EscapeMap` | DONE | |
-| 5.5 | `GuardedMap` consuming both truth values | DONE | |
-
-### §7 (6.x) Root package and live frontier
+### §6 Lean API
 
 | Req | Requirement | Status | Ref |
 |-----|-------------|--------|-----|
-| 6.1–6.2 | Exact root goal and root seam | DOWNSTREAM | |
-| 6.3 | `Frontier` package | DONE | |
-| 6.4 | Replace one leaf by a child via `Edge`, siblings preserved | DONE | `CHG-09` |
-| 6.4 | Replace one leaf by children via `Split`, siblings preserved | DONE | `CHG-09` |
+| 6.1 | `Goal`, `Goal.Proved`, `Edge`, `Edge.id/trans` | DONE | |
+| 6.1 | `Edge` universe explicit, not inferred | DONE | `CHG-12` |
+| 6.2 | `Split` with coverage proof | DONE | |
+| 6.3 | `BadNode`, `BadNode.Closed` | DONE | `DEV-01` |
+| 6.3 | `WitnessMap`, `WitnessSplit`, `closed_parent` | DONE | `CHG-10` |
+| 6.3 | Witness / branch / task types universe-polymorphic | DONE | `CHG-12` |
+| 6.4 | `EscapeMap` | DONE | |
+| 6.5 | `GuardedMap` consuming both truth values | DONE | |
 
-### §8 (7.x) Typed candidate graph and promotion queue
+### §7 Root package and live frontier
 
 | Req | Requirement | Status | Ref |
 |-----|-------------|--------|-----|
-| 7.1 | No prose edges; every candidate has an exact Lean proposition | DONE | |
-| 7.2 | Candidate edges expose all composition debt (Shape A / Shape B) | MISSING | |
-| 7.3 | Record carries `sourceIds`, `targetId`, `expectedTheoremName` | MISSING | only `id`, `targetProp`, `status` exist |
-| 7.4 | Lifecycle `DRAFT → SEALED_UNVERIFIED → CERTIFIED` | PARTIAL | `sealedUnverified` is unreachable |
-| 7.4 | Terminal states reachable and final | MISSING | a refuted candidate can still be promoted |
-| 7.5 | Sealed target immutable for the attempt | PARTIAL | convention, not enforced |
-| 7.6 | Promotion is not prize progress | DONE | no aggregate is emitted |
-| 7.7 | Certified frontier rendered separately from the promotion queue | MISSING | no renderer |
-| 7.8 | History: seal hash, commit, timestamp, status, reason | PARTIAL | seal hash only, `CHG-08` |
+| 7.1–7.2 | Exact root goal and root seam | DOWNSTREAM | |
+| 7.3 | `Frontier` package | DONE | |
+| 7.4 | Replace one leaf by a child via `Edge`, siblings preserved | DONE | `CHG-09` |
+| 7.4 | Replace one leaf by children via `Split`, siblings preserved | DONE | `CHG-09` |
+
+### §8 Typed candidate graph and promotion queue
+
+| Req | Requirement | Status | Ref |
+|-----|-------------|--------|-----|
+| 8.1 | No prose edges; every candidate has an exact Lean proposition | DONE | |
+| 8.2 | Candidate edges expose all composition debt (Shape A / Shape B) | DONE | `CHG-17` — `CompositionDebt`, `shapeA_iff_shapeB` |
+| 8.3 | Record carries `sourceIds`, `targetId`, `expectedTheoremName` | DONE | `CHG-14` — `SealRecord` |
+| 8.4 | Lifecycle `DRAFT → SEALED_UNVERIFIED → CERTIFIED` | DONE | `CHG-14` — one type per state |
+| 8.4 | Terminal states reachable and final | DONE | `CHG-14` — `status_not_promotable` |
+| 8.5 | Sealed target immutable for the attempt | DONE | `CHG-14` — target is a type parameter |
+| 8.6 | Promotion is not prize progress | DONE | no aggregate is emitted |
+| 8.7 | Certified frontier rendered separately from the promotion queue | DONE | `CHG-16` — `QueueReport` |
+| 8.8 | History: seal hash, commit, timestamp, status, reason | DONE | `CHG-08`, `CHG-14` |
 
 ### §9 LDB counterexample vocabulary
 
 | Req | Requirement | Status | Ref |
 |-----|-------------|--------|-----|
-| 9 | `ListViolation` and LDB-specific vocabulary | DOWNSTREAM | `SPEC-03` — contradicts §2.1 |
+| 9 | `ListViolation` and LDB-specific vocabulary | DOWNSTREAM | `SPEC-03` — relocated in spec |
 
-### §10 (8.x) Quantitative partial progress
+### §10 Quantitative partial progress
 
 | Req | Requirement | Status | Ref |
 |-----|-------------|--------|-----|
-| 8.1 | Structural progress via certified splits | DONE | |
-| 8.2 | Monotone parameterized families with an explicit monotonicity theorem | MISSING | no representation at all |
-| 8.2 | Numerical reward only for a strictly stronger parameter under identical node semantics | MISSING | depends on the above |
-| 8.3 | Certified root-bound evaluator | DEFERRED | spec says do not implement yet |
+| 10.1 | Structural progress via certified splits | DONE | |
+| 10.2 | Monotone parameterized families with an explicit monotonicity theorem | DONE | `CHG-15` |
+| 10.2 | Numerical reward only for a strictly stronger parameter under identical node semantics | DONE | `CHG-15` — `Progress` |
+| 10.3 | Certified root-bound evaluator | DEFERRED | spec says do not implement yet |
 
 ### §11 Agent task contract
 
 | Req | Requirement | Status | Ref |
 |-----|-------------|--------|-----|
 | 11.1–11.6 | Task contract documented | DONE | `AGENTS.md` |
-| 11 | Binary `OPEN → CLOSED` reward | PARTIAL | documented, not machine-emitted |
-| 11 | Monotone-leaf reward variant | MISSING | depends on §8.2 |
+| 11 | Binary `OPEN → CLOSED` reward | DONE | `CHG-16` — `TaskStatus`, `FrontierReport` |
+| 11 | Monotone-leaf reward variant | DONE | `CHG-15` — `Progress` |
 
-### §12 (10.x) Graph-change protocol
-
-| Req | Requirement | Status | Ref |
-|-----|-------------|--------|-----|
-| 10.1 | Refinement requires a compiled coverage theorem | DONE | `CHG-09` |
-| 10.2 | Invalid refinements rejected | PARTIAL | list not exhausted |
-| 10.3 | Retirement removes from the live frontier | DONE | `CHG-09` |
-
-### §14 (12.x) Verification integration
+### §12 Graph-change protocol
 
 | Req | Requirement | Status | Ref |
 |-----|-------------|--------|-----|
-| 12.2.1 | Build the live graph and every registered closed-task module | DONE | `crrg-check` |
-| 12.2.2 | Reject banned constructs | MISSING | no banned-construct scan |
-| 12.2.3 | Transitive `collectAxioms` over the live graph | DONE | `CHG-07` |
-| 12.2.4 | Type-link the root exactly | DONE | `Frontier.rootIs` |
-| 12.2.5 | Type-link each task theorem exactly | DONE | `Frontier.leafIs` |
-| 12.2.6 | Print only `OPEN` / `CLOSED` / `INVALID` per task | MISSING | no task-status renderer |
-| 12.2.7 | Print no aggregate count or percentage | MISSING | not asserted by any gate |
-| 12.3 | Lean is authority over rendered state | DONE | |
+| 12.1 | Refinement requires a compiled coverage theorem | DONE | `CHG-09` |
+| 12.2 | Invalid refinements rejected | DONE | 44 asserted rejections across the suite |
+| 12.3 | Retirement removes from the live frontier | DONE | `CHG-09` |
+
+### §14 Verification integration
+
+| Req | Requirement | Status | Ref |
+|-----|-------------|--------|-----|
+| 14.2.1 | Build the live graph and every registered closed-task module | DONE | `crrg-check` |
+| 14.2.2 | Reject banned constructs | DONE | `CHG-16` — `crrg-banned` |
+| 14.2.3 | Transitive `collectAxioms` over the live graph | DONE | `CHG-07` |
+| 14.2.4 | Type-link the root exactly | DONE | `Frontier.rootIs` |
+| 14.2.5 | Type-link each task theorem exactly | DONE | `Frontier.leafIs` |
+| 14.2.6 | Print only `OPEN` / `CLOSED` / `INVALID` per task | DONE | `CHG-16` |
+| 14.2.7 | Print no aggregate count or percentage | DONE | `CHG-16` — `render_length` theorem |
+| 14.3 | Lean is authority over rendered state | DONE | |
 
 ### §15 Stage A — synthetic unit tests
 
@@ -173,10 +174,10 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 | 8 | The gate rejects a weakened child / missing branch in a negative test | DONE |
 | 9–11 | Prize gate unchanged, no percentage, Disprove side unchanged | DOWNSTREAM |
 | 12 | Every candidate has an exact compilable proposition | DONE |
-| 13 | A sealed target cannot be weakened in place | PARTIAL |
+| 13 | A sealed target cannot be weakened in place | DONE |
 | 14 | Promotion requires the exact proposition plus the axiom/type-link gate | DONE |
 | 15 | Yukon damaged-proof cost measured before directing live Soundness | DEFERRED — Stage C |
-| 16 | An agent gets a correct binary reward from one exact leaf | PARTIAL |
+| 16 | An agent gets a correct binary reward from one exact leaf | DONE |
 
 ---
 
@@ -186,6 +187,33 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
+
+#### `CHG-18` — docs: close out the conformance matrix and refresh `README.md`
+
+Updates section 1 to reflect the state at the end of this work, and renumbers its
+row labels to the post-`SPEC-01` scheme (so a row now reads `§14.2.3`, not
+`§12.2.3`).
+
+Every requirement in CRRG's own scope is now `DONE`. What remains is:
+
+| Item | Why it is not `DONE` |
+|------|----------------------|
+| §2.2 `Test/YukonReplay/` | Stage B — explicitly out of scope for this work |
+| §2.4 pinned-SHA integration | needs a published CRRG commit to pin against |
+| §5.1, §7.1–7.2, §9 | `DOWNSTREAM` — the root and its vocabulary belong to the adapter |
+| §10.3 root-bound evaluator | the spec says do not implement this yet |
+| Acceptance 15 | Stage C |
+
+`README.md` gains the new primitives, the five-step gate, the strengthened trust
+model, and a statement that the core is Lean-core-only so consuming CRRG does not
+constrain a downstream project's version resolution.
+
+**Final state.** `scripts/crrg-check` passes from a clean tree: 481 declarations
+audited with no banned axiom dependency, no banned constructs, 29 build targets,
+and **44 asserted rejections** across the suite. The downstream integration
+fixture builds against the library, and all four gates behave correctly against
+it — honest promotion passes; a `sorry`-backed promotion is rejected by the
+promotion check, by the namespace axiom audit, and by the banned-construct scan.
 
 #### `CHG-17` / `SPEC-09` — feat: composition debt (§8.2), a toy end-to-end programme, and the projection-reducibility rule (§6.6)
 

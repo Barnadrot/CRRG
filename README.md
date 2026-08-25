@@ -4,6 +4,10 @@ A kernel-checked partial-progress architecture for autonomous mathematical resea
 
 CRRG makes proof decompositions visible to the Lean 4 kernel, providing exact local reward signals for research agents working on grand challenge problems.
 
+The core library depends on **Lean core only** — no Mathlib, so consuming it does
+not constrain a downstream project's version resolution. See [`CHANGELOG.md`](CHANGELOG.md)
+for the spec-conformance matrix and the full audit trail.
+
 ## Core primitives
 
 | Type | Purpose |
@@ -20,8 +24,15 @@ CRRG makes proof decompositions visible to the Lean 4 kernel, providing exact lo
 | `Frontier.refineLeaf` | Replace one leaf via an `Edge`, preserving siblings |
 | `Frontier.splitLeaf` | Replace one leaf by a `Split`'s branches, preserving siblings |
 | `Frontier.retireLeaf` | Drop a leaf from the live frontier — requires a real proof |
-| `CandidateEdge` | Typed promotion queue entry with exact Lean proposition |
-| `SealedCandidate` | Immutable candidate target for promotion attempts |
+| `DraftCandidate` | An editable candidate; target is still a field |
+| `SealedCandidate P` | Sealed target — `P` is a type parameter, so it cannot be weakened |
+| `Outcome P` | Terminal states; `certified` carries a proof, `refuted` a disproof |
+| `ResolvedCandidate P` | Seal plus outcome, retained as history |
+| `PromotionQueue` | Sealed-but-unresolved tasks; cannot close a root |
+| `CompositionDebt` | Premise list plus conclusion; the target is computed from it |
+| `MonotoneFamily` | A parameter order with its monotonicity theorem as a field |
+| `Progress F old new` | The only numerical reward: a strict improvement, same family |
+| `FrontierReport` | One line per task, `OPEN`/`CLOSED`/`INVALID`, no aggregate |
 
 ## Repository layout
 
@@ -60,8 +71,9 @@ CRRG never imports project-specific mathematics. The downstream project owns its
 
 ## Scripts
 
-- `scripts/crrg-check` — build + tests + declaration audit + transitive axiom audit
-- `scripts/crrg-audit` — transitive axiom audit alone (Spec 12.2 item 3)
+- `scripts/crrg-check` — the full five-step gate
+- `scripts/crrg-audit` — transitive axiom audit (Spec §14.2 item 3)
+- `scripts/crrg-banned` — banned-construct scan (Spec §14.2 item 2, §5.6, §14.2 item 7)
 - `scripts/crrg-status` — human-readable state summary
 - `scripts/crrg-lineage` — print axiom dependencies of a declaration
 - `scripts/crrg-seal` — print a candidate's exact type and seal hash before sealing
@@ -79,6 +91,10 @@ CRRG_WORKDIR=/path/to/proximity-research CRRG_IMPORTS=ProximityPrize.Squeeze.Sou
 
 - Every edge is a Lean theorem (no prose-only arrows)
 - No certified edge or promoted candidate may depend on `sorry`
+- A sealed candidate target cannot be weakened in place — it is a type parameter
+- A refutation must carry a disproof; a resolved candidate cannot be promoted
+- Numerical reward only for a strictly stronger parameter in the *same* family
+- The gate emits one line per task and no aggregate — `render_length` is a theorem
 - Every split proves coverage
 - Guards produce sibling branches (never silently dropped)
 - Exceptions are never deleted
