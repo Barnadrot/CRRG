@@ -12,8 +12,10 @@ set -euo pipefail
 #   CRRG_IMPORTS    comma-separated modules to import (default: CRRG)
 #   CRRG_WORKDIR    Lake project root to run in (default: the CRRG repo root)
 #   CRRG_SEALS      registry path (default: $CRRG_WORKDIR/crrg-seals.tsv)
-#   CRRG_SEAL_SCOPE namespace whose definitions the seal covers
-#                   (default: the target's own root namespace)
+#   CRRG_SEAL_SCOPE comma-separated namespaces whose definitions the seal covers
+#                   (default: the target's own root namespace). Several are
+#                   usually required: an adapter's targets and its mathematics
+#                   normally live in different namespaces.
 #
 # What a seal hash is for
 # -----------------------

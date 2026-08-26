@@ -189,6 +189,24 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-27` — feat: `CRRG_SEAL_SCOPE` accepts several namespaces
+
+Spec §2.3 requires a downstream gate to set the seal scope explicitly and warns
+against relying on an accidentally narrow prefix. Acting on that for the Yukon
+adapter exposed a gap in the tool: the scope was a single `Name`.
+
+That is not enough for a realistic adapter, and the failure is silent. The graph
+declares its obligations in its own namespace (`YukonGraph.MCATerm`) while the
+mathematics they refer to lives in the project's (`ProximityPrize.*`). The
+closure walk only traverses *through* in-scope constants, so a single scope
+stops at the first constant in the other namespace and everything past that
+point leaves the hash — while the seal still verifies. A seal that covers less
+than its reader assumes is the specific failure §2.3 names.
+
+`CRRG_SEAL_SCOPE` is now comma-separated. The self-test pins the property that
+matters: adding a second scope must change the hash, because it must widen the
+closure.
+
 #### `CHG-26` / `SPEC-15` — fix: **the seal hash was a function of the target's name, not its proposition**
 
 External Review 1 §2.1 recorded sealing as "not yet a durable seal" — a

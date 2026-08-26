@@ -66,9 +66,18 @@ def crrgRefsOf (env : Environment) (n : Name) : Array Name :=
     It does not cover Mathlib or Lean core, which are pinned by the Lake
     manifest rather than by a seal, and hashing them would make every seal
     depend on a multi-gigabyte dependency closure. The scope is the project's
-    own namespace: the part a research agent can actually edit. -/
-def crrgScopedClosure (env : Environment) (root : Name) (scope : Name) :
+    own namespace: the part a research agent can actually edit.
+
+    **Several scopes are allowed, and are usually required.** An adapter's
+    targets and its mathematics normally live in different namespaces — the
+    graph declares `MyGraph.SomeTerm` while the semantics sit under
+    `TheProject.*`. Walking only one of them stops at the first constant in the
+    other, so everything past that point silently leaves the hash. That is the
+    "accidentally narrow namespace prefix" failure: the seal still verifies, and
+    covers less than its reader assumes. -/
+def crrgScopedClosure (env : Environment) (root : Name) (scopes : List Name) :
     Array Name := Id.run do
+  let inScope (n : Name) : Bool := scopes.any (fun s => s.isPrefixOf n)
   let mut seen : NameSet := {}
   let mut queue : Array Name := #[root]
   seen := seen.insert root
@@ -81,13 +90,13 @@ def crrgScopedClosure (env : Environment) (root : Name) (scope : Name) :
     if h : idx < queue.size then
       let n := queue[idx]
       idx := idx + 1
-      let inScope := scope.isPrefixOf n
-      if n != root && inScope then
+      let here := inScope n
+      if n != root && here then
         out := out.push n
       -- Only walk *through* in-scope constants. A Mathlib lemma's own
       -- dependencies are Mathlib's business, and following them would drag the
       -- whole library into the hash.
-      if n == root || inScope then
+      if n == root || here then
         for m in crrgRefsOf env n do
           unless seen.contains m do
             seen := seen.insert m
@@ -123,12 +132,17 @@ run_cmd do
   -- Default scope: the target's own root namespace. That is the project's
   -- editable surface, and it is what a downstream adapter wants.
   let scopeStr := ((← IO.getEnv "CRRG_SEAL_SCOPE").getD "").trimAscii.toString
-  let scope : Name :=
+  let scopes : List Name :=
     if scopeStr.isEmpty then
       match declName.components with
-      | c :: _ => c
-      | [] => declName
-    else scopeStr.toName
+      | c :: _ => [c]
+      | [] => [declName]
+    else
+      (scopeStr.splitOn ",").filterMap fun t =>
+        let t := t.trimAscii.toString
+        if t.isEmpty then none else some t.toName
+  if scopes.isEmpty then
+    throwError "crrg-seal: CRRG_SEAL_SCOPE is set but names no namespace"
 
   let kind :=
     match ci with
@@ -153,7 +167,7 @@ run_cmd do
       | none => pure ""
     else pure ""
 
-  let deps := crrgScopedClosure env declName scope
+  let deps := crrgScopedClosure env declName scopes
   let mut entries : Array String := #[← crrgSealEntry env declName]
   for d in deps do
     entries := entries.push (← crrgSealEntry env d)
@@ -161,7 +175,7 @@ run_cmd do
   IO.println s!"CRRG_SEAL_DECL {declName}"
   IO.println s!"CRRG_SEAL_KIND {kind}"
   IO.println s!"CRRG_SEAL_DENOTES_PROP {denotesProp}"
-  IO.println s!"CRRG_SEAL_SCOPE {scope}"
+  IO.println s!"CRRG_SEAL_SCOPE {scopes}"
   IO.println s!"CRRG_SEAL_DEPS {deps.size}"
   IO.println "CRRG_SEAL_READABLE_BEGIN"
   IO.println readable
@@ -170,7 +184,7 @@ run_cmd do
   IO.println "CRRG_SEAL_READABLE_END"
   -- Everything strictly between these markers, and nothing else, is hashed.
   IO.println "CRRG_SEAL_CANONICAL_BEGIN"
-  IO.println s!"scope: {scope}"
+  IO.println s!"scopes: {scopes}"
   for e in entries do
     IO.println e
   IO.println "CRRG_SEAL_CANONICAL_END"

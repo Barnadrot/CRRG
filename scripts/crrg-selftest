@@ -172,6 +172,15 @@ H_COMPOSED_NARROW="$(CRRG_SEAL_SCOPE=NoSuchNamespace seal_hash "$SEAL_IMPORTS" S
   && check true "the seal covers the target's in-scope dependencies" \
   || check false "the seal covers the target's in-scope dependencies"
 
+# Several scopes must widen the closure. An adapter's targets and its
+# mathematics live in different namespaces, so a single-scope seal stops at the
+# first constant in the other one and silently covers less than its reader
+# assumes -- while still verifying.
+H_COMPOSED_WIDE="$(CRRG_SEAL_SCOPE="SealFixture,Nat" seal_hash "$SEAL_IMPORTS" SealFixture.Composed)"
+[ -n "$H_COMPOSED_WIDE" ] && [ "$H_COMPOSED_WIDE" != "$H_COMPOSED" ] \
+  && check true "a second seal scope widens the sealed closure" \
+  || check false "a second seal scope widens the sealed closure"
+
 expect ok "SEAL OK" \
   "--verify accepts the recorded hash" \
   env CRRG_IMPORTS="$SEAL_IMPORTS" "$SCRIPT_DIR/crrg-seal" --verify \
