@@ -48,7 +48,8 @@ the staged implementation plan (§15). Do not reconcile the two.
 | 2.1 | CRRG imports no project-specific vocabulary | DONE | |
 | 2.2 | Standalone repository layout | DONE | `SPEC-04` |
 | 2.2 | Core is dependency-light (Lean core only) | DONE | `DEV-01` |
-| 2.2 | `Test/YukonReplay/` fixture | DEFERRED | Stage B |
+| 2.2 | Generic replay patterns in `Test/Synthetic/Replay.lean` | DONE | `CHG-23` — a Yukon fixture inside CRRG would violate §2.1 |
+| 2.2 | Toolchain portability is checked, not asserted | DONE | `CHG-22` |
 | 6.6 | Projection-reducibility usage rule | DONE | `SPEC-09` |
 | 2.3 | Downstream adapter shape | DONE | `CHG-08` |
 | 2.4 | Sibling-checkout development builds | DONE | `CHG-08` |
@@ -129,7 +130,7 @@ the staged implementation plan (§15). Do not reconcile the two.
 | Req | Requirement | Status | Ref |
 |-----|-------------|--------|-----|
 | 12.1 | Refinement requires a compiled coverage theorem | DONE | `CHG-09` |
-| 12.2 | Invalid refinements rejected | DONE | 44 asserted rejections across the suite |
+| 12.2 | Invalid refinements rejected | DONE | 49 asserted rejections across the suite |
 | 12.3 | Retirement removes from the live frontier | DONE | `CHG-09` |
 
 ### §14 Verification integration
@@ -187,6 +188,52 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
+
+#### `CHG-23` / `SPEC-12` — feat: generic replay patterns; no Yukon fixture inside CRRG
+
+`Spec.md` §2.2 reserved a `Test/YukonReplay/` directory inside CRRG for the
+Stage B integration fixture. That directory is now struck from the layout: it
+was a **boundary violation of §2.1**. Reconstructing the Yukon proof requires
+importing the Yukon mathematics, and CRRG must never import a research project's
+vocabulary. The matrix carried the row as `DEFERRED — Stage B`, which read as
+"not built yet" when the correct status was "must not be built here". Stage B
+correctly put the reconstruction downstream instead, so the spec was describing
+a layout the implementation had already, rightly, declined to produce.
+
+What *is* generic is the shape of the exercise. `Test/Synthetic/Replay.lean`
+extracts the four patterns Stage B produced and states each against an anonymous
+toy development — no constant, type or lemma corresponds to anything in a
+research project:
+
+| # | Pattern | What it catches |
+|---|---------|-----------------|
+| P1 | Coverage by the structure constructor | an invented or dropped obligation |
+| P2 | Coverage by refactor, not by re-proof | a split needing an ingredient the real proof did not |
+| P3 | The agreement set | the graph drifting away from the development |
+| P4 | Sibling preservation under refinement | a refinement quietly discarding obligations |
+
+Five asserted rejections, each verified to fail for the *intended* reason rather
+than incidentally: the truncated split is rejected because the constructor still
+demands the field it omitted; the two-ingredient coverage theorem because
+`Nat.le_trans` has nowhere to hide the missing middle step; the drifted constant
+because `decide` proves the equation **false**; and the `Frontier.compose`
+example because the composed frontier does not mention the siblings at all —
+which is §7.4's warning made concrete instead of left as prose.
+
+**One honest correction to how P3 should be read.** An agreement check of the
+form `(crrgClosure : P) = (landed : P) := rfl` does not compare proof *terms*:
+`P` is a `Prop`, so proof irrelevance already equates any two of its
+inhabitants. What the check establishes is that both sides inhabit the same
+proposition — which is the property worth having, since a reconstruction that
+closed a *different* endpoint is the failure mode — but it is weaker than "the
+graph reproduces the proof". The file says so, so the pattern is copied with the
+right expectation.
+
+The file also demonstrates §6.6 item 2 in its natural habitat: its predicates
+are plain `def`s, as a downstream adapter's would be, so `by decide` fails with
+`failed to synthesize Decidable Premise` and each proof restates its goal with
+`show` first. That error names the projection rather than the cause, which is
+exactly the trap §6.6 exists to document.
 
 #### `CHG-22` / `SPEC-11` — feat: the gate builds under every supported toolchain
 
@@ -361,7 +408,6 @@ Every requirement in CRRG's own scope is now `DONE`. What remains is:
 
 | Item | Why it is not `DONE` |
 |------|----------------------|
-| §2.2 `Test/YukonReplay/` | Stage B — explicitly out of scope for this work |
 | §2.4 pinned-SHA integration | needs a published CRRG commit to pin against |
 | §5.1, §7.1–7.2, §9 | `DOWNSTREAM` — the root and its vocabulary belong to the adapter |
 | §10.3 root-bound evaluator | the spec says do not implement this yet |

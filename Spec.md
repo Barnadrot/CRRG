@@ -109,9 +109,7 @@ crrg/
       Escape.lean
       CandidateSeal.lean
       NegativeTests.lean
-
-    YukonReplay/               -- Stage B; not present until Stage A is complete
-      ... integration fixture / adapter ...
+      Replay.lean              -- generic retrospective-reconstruction patterns
 
   scripts/
     crrg-check                 -- the full gate
@@ -132,6 +130,22 @@ crrg/
 
 `Edge` lives in `Basic.lean` beside `Goal` rather than in its own file: an edge
 is meaningless without a goal, and §13's pilot layout likewise groups them.
+
+**There is no Yukon replay fixture inside CRRG (normative).** Earlier drafts of
+this layout reserved a `Test/YukonReplay/` directory for the Stage B integration
+fixture. That was a boundary violation of §2.1: reconstructing the Yukon proof
+requires importing the Yukon mathematics, which CRRG must never do. The Stage B
+reconstruction therefore lives downstream, in the consuming project's adapter,
+where the mathematics already is.
+
+What belongs in CRRG is the *shape* of the exercise, with none of its content.
+`Test/Synthetic/Replay.lean` holds the four patterns Stage B produced —
+coverage by the structure constructor, coverage by refactor rather than
+re-proof, the agreement set, and sibling preservation under refinement — stated
+against an anonymous toy development. Each is a claim about CRRG rather than
+about any particular proof, so each is testable inside CRRG and copyable by the
+next adapter. If a reader recognises a research quantity in that file, it is a
+boundary violation and should be removed rather than blessed.
 
 The **core library** must remain Lean-core-only. The **test library** may take
 additional dependencies, including Mathlib, because nothing downstream links
