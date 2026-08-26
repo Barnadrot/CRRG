@@ -1,0 +1,17 @@
+# Toolchains CRRG must build cleanly under, one per line.
+#
+# CRRG's core is Lean-core-only, so it is portable by construction -- but
+# "portable" is a claim, and an unchecked claim is how OPEN-01 happened: the
+# core linters that produced it exist from v4.31 onward, CRRG pinned v4.30.0,
+# and the finding had to be reported by a downstream consumer because CRRG's own
+# gate could not see it.
+#
+# The rule: every toolchain a live downstream consumer pins belongs in this
+# list. Add a line when a consumer moves; do not remove one while a consumer is
+# still on it.
+#
+#   v4.30.0   CRRG's own pin, and the outer proximity-research repository
+#   v4.32.2   the vendored Yukon lower environment, and so the Stage B/C adapter
+#
+leanprover/lean4:v4.30.0
+leanprover/lean4:v4.32.2

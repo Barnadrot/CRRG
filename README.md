@@ -53,11 +53,22 @@ Requires Lean 4 v4.30.0 (via elan).
 ```bash
 lake build CRRG        # build the library
 lake build Test        # build and check all tests (incl. negative tests)
-scripts/crrg-check     # full gate: library + tests + declarations + axiom audit
+scripts/crrg-check     # the full seven-step gate
 ```
 
 Note that `lake build` with no target builds only the `CRRG` library. CI must run
 `scripts/crrg-check` (or `lake build Test` explicitly) to execute the tests.
+
+The core is Lean-core-only, so it is consumed by projects pinning different
+toolchains. `scripts/crrg-portability` builds the library and the full test
+suite under every toolchain in `scripts/portability-toolchains.txt` and treats
+any warning as a failure — a consumer inherits CRRG's warnings and cannot tell
+them apart from its own. Both listed toolchains must be installed:
+
+```bash
+elan toolchain install leanprover/lean4:v4.30.0
+elan toolchain install leanprover/lean4:v4.32.2
+```
 
 ## Integration
 
@@ -71,7 +82,8 @@ CRRG never imports project-specific mathematics. The downstream project owns its
 
 ## Scripts
 
-- `scripts/crrg-check` — the full five-step gate
+- `scripts/crrg-check` — the full seven-step gate
+- `scripts/crrg-portability` — clean build under every supported toolchain
 - `scripts/crrg-audit` — transitive axiom audit (Spec §14.2 item 3)
 - `scripts/crrg-banned` — banned-construct scan (Spec §14.2 item 2, §5.6, §14.2 item 7)
 - `scripts/crrg-status` — human-readable state summary

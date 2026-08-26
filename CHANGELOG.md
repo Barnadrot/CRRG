@@ -188,6 +188,43 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-22` / `SPEC-11` — feat: the gate builds under every supported toolchain
+
+`OPEN-01` was found by a downstream project rather than by CRRG's own gate. The
+reason was not that the finding was subtle — it was that CRRG's gate had only
+ever built under **one** toolchain, while CRRG is consumed by projects pinning
+different ones. Nothing in the gate could have caught it.
+
+`scripts/crrg-portability` builds the library and the full test suite under
+every toolchain in `scripts/portability-toolchains.txt`, and **treats any
+warning as a failure**. It is step 4 of `crrg-check`.
+
+Warnings are failures rather than noise because a downstream consumer inherits
+them and cannot tell CRRG's from its own. Steps 2 and 3 still build under the
+primary toolchain first, so the common failure is reported before the slower
+sweep.
+
+**It paid for itself on first run.** The `defProp` audit in `CHG-20` covered the
+core library, because the core was all that had ever been built under v4.32.2.
+The portability check immediately surfaced **twelve more** in the *test suite* —
+`Edge`- and `Progress`-valued fixtures in `Edge.lean`, `Refinement.lean`,
+`Monotone.lean`, `ToyResearch.lean` and `NegativeTests.lean`. Those are now
+`theorem`, along with their `#expect_failure` counterparts, so that a negative
+test and the positive control it contrasts with are declared the same way. The
+true `OPEN-01` count was therefore **23**, not 7.
+
+A second result worth recording: the full suite, all **45** asserted rejections,
+builds and passes under v4.32.2 as well. `#expect_failure` forces
+`Elab.async := false` to observe errors inside `theorem` bodies (`CHG-13`), and
+that behaviour was only ever pinned against v4.30.0. It holds on both.
+
+The toolchain list is deliberately a file rather than a constant: the rule is
+that every toolchain a live downstream consumer pins belongs in it, so the list
+changes when a consumer moves, not when CRRG does.
+
+The gate now runs in about eight seconds end to end, including two clean
+cross-toolchain rebuilds.
+
 #### `CHG-21` / `SPEC-10` — feat: `WitnessSplit` is indexed by its branch family
 
 `OPEN-01` half two. The old shape carried the decomposition in fields:

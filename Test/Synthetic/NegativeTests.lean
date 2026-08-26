@@ -53,20 +53,20 @@ private def weakChild : Goal := ⟨(0 : Nat) + 0 = 0⟩
 private def parentNeedsStrong : Goal := ⟨∀ (n : Nat), n + 0 = n⟩
 
 -- Positive: the exact child discharges the parent.
-private def honestEdge : Edge parentNeedsStrong strongChild := ⟨_root_.id⟩
+private theorem honestEdge : Edge parentNeedsStrong strongChild := ⟨_root_.id⟩
 
 /- Negative: the weakened child (one instance instead of all `n`) does not. -/
 #expect_failure
-private def weakeningEdge : Edge parentNeedsStrong weakChild := ⟨fun h => h⟩
+private theorem weakeningEdge : Edge parentNeedsStrong weakChild := ⟨fun h => h⟩
 
 /-! ## 3. Edge direction is rootward and cannot be reversed. -/
 
-private def correctDirection : Edge ⟨True⟩ ⟨1 = 1⟩ := ⟨fun _ => trivial⟩
+private theorem correctDirection : Edge ⟨True⟩ ⟨1 = 1⟩ := ⟨fun _ => trivial⟩
 
 /- Negative: `Edge parent child` is `child.claim → parent.claim`, so a proof in
 the leafward direction is rejected. -/
 #expect_failure
-private def reversedDirection : Edge ⟨(1 : Nat) = 1⟩ ⟨True⟩ := ⟨fun _ => trivial⟩
+private theorem reversedDirection : Edge ⟨(1 : Nat) = 1⟩ ⟨True⟩ := ⟨fun _ => trivial⟩
 
 /-! ## 4. A guard must consume both truth values. -/
 

@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Cross-toolchain portability check.
+#
+# Builds the CRRG library and its test suite under every toolchain listed in
+# scripts/portability-toolchains.txt, and treats any warning as a failure.
+#
+# Why this exists: CRRG's core is Lean-core-only, so it is *claimed* to be
+# portable across toolchains. Until this script, nothing checked the claim. The
+# gap was not theoretical -- Lean's `defProp` and `checkUnivs` linters are core
+# from v4.31 onward, CRRG pinned v4.30.0, and eleven warnings had to be reported
+# by a downstream consumer on v4.32.2 because CRRG's own gate was structurally
+# unable to see them (OPEN-01). A library consumed at a pinned SHA by projects on
+# different toolchains has to check all of them or none of its portability
+# claims mean anything.
+#
+# Warnings are failures here, not noise. Every downstream consumer inherits
+# them, and a consumer cannot tell CRRG's warnings apart from its own.
+#
+# Environment:
+#   CRRG_TOOLCHAINS   space-separated override for the toolchain list
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CRRG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+LIST="$SCRIPT_DIR/portability-toolchains.txt"
+
+cd "$CRRG_ROOT"
+
+if [ -n "${CRRG_TOOLCHAINS:-}" ]; then
+  read -ra TOOLCHAINS <<< "$CRRG_TOOLCHAINS"
+else
+  mapfile -t TOOLCHAINS < <(grep -vE '^\s*(#|$)' "$LIST")
+fi
+
+PRIMARY="$(tr -d '[:space:]' < "$CRRG_ROOT/lean-toolchain")"
+
+echo "=== CRRG portability check ==="
+echo "Primary (lean-toolchain): $PRIMARY"
+echo "Checking: ${TOOLCHAINS[*]}"
+echo ""
+
+if ! command -v elan >/dev/null 2>&1; then
+  echo "  elan is not on PATH; cannot select toolchains." >&2
+  exit 1
+fi
+
+installed="$(elan toolchain list 2>/dev/null)"
+missing=()
+for tc in "${TOOLCHAINS[@]}"; do
+  grep -qx -- "$tc" <<< "$installed" || missing+=("$tc")
+done
+if [ ${#missing[@]} -gt 0 ]; then
+  echo "  Not installed: ${missing[*]}" >&2
+  echo "  Install with: elan toolchain install ${missing[*]}" >&2
+  exit 1
+fi
+
+# The primary toolchain is checked last so the tree is left with build
+# artifacts matching lean-toolchain, as an ordinary `lake build` would.
+ordered=()
+for tc in "${TOOLCHAINS[@]}"; do [ "$tc" != "$PRIMARY" ] && ordered+=("$tc"); done
+ordered+=("$PRIMARY")
+
+failed=0
+for tc in "${ordered[@]}"; do
+  echo "--- $tc ---"
+  # Each toolchain writes incompatible oleans to the same build directory, so
+  # start clean rather than trusting a stale trace. CRRG is ~43 modules; this
+  # costs seconds.
+  rm -rf "$CRRG_ROOT/.lake/build"
+  if ! out="$(elan run "$tc" lake build CRRG Test 2>&1)"; then
+    echo "$out" | tail -40
+    echo "  BUILD FAILED under $tc" >&2
+    failed=1
+    continue
+  fi
+  # Lean reports diagnostics as `warning: ...`; Lake flags the module with `⚠`.
+  warns="$(grep -E '^warning:' <<< "$out" || true)"
+  if [ -n "$warns" ]; then
+    echo "$warns"
+    echo "  WARNINGS under $tc — every downstream consumer inherits these." >&2
+    failed=1
+  else
+    echo "  clean (no warnings)"
+  fi
+done
+
+echo ""
+if [ "$failed" -ne 0 ]; then
+  echo "=== CRRG portability check FAILED ==="
+  exit 1
+fi
+echo "=== CRRG portability check PASSED ==="

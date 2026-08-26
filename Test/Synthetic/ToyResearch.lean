@@ -149,7 +149,7 @@ theorem tail2048 : tailFamily.claim 2048 := by
   decide
 
 /-- A certified improvement from radius 1900 out to 2048, same node semantics. -/
-def tighten : Progress tailFamily 1900 2048 where
+theorem tighten : Progress tailFamily 1900 2048 where
   improvement := ⟨by omega, by omega⟩
   proof := tail2048
 
@@ -158,7 +158,7 @@ example : TailThresholdAt 1900 := tighten.implies_old
 
 /- Negative: retreating to a smaller radius is a weaker claim, not progress. -/
 #expect_failure
-def loosen : Progress tailFamily 2048 1900 where
+theorem loosen : Progress tailFamily 2048 1900 where
   improvement := ⟨by omega, by omega⟩
   proof := tailThreshold1900
 

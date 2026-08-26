@@ -34,7 +34,7 @@ private def baseDec : DecidableEq base.Task := inferInstanceAs (DecidableEq T2)
 
 private def strongerChild : Goal := ⟨∀ n : Nat, n + 0 = n ∧ 0 + n = n⟩
 
-private def edgeA : Edge (base.leaf T2.a) strongerChild :=
+private theorem edgeA : Edge (base.leaf T2.a) strongerChild :=
   ⟨fun h n => (h n).1⟩
 
 private def refined : Frontier rootGoal := base.refineLeaf baseDec T2.a edgeA

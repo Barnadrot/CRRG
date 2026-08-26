@@ -114,9 +114,12 @@ crrg/
       ... integration fixture / adapter ...
 
   scripts/
-    crrg-check                 -- build + tests + declarations + axiom audit
+    crrg-check                 -- the full gate
     crrg-audit                 -- transitive collectAxioms gate (§14.2 item 3)
     axiom_audit_body.lean.in   -- elaborator body used by crrg-audit
+    crrg-banned                -- banned-construct scan (§14.2 item 2)
+    crrg-portability           -- clean build under every supported toolchain
+    portability-toolchains.txt -- the supported toolchain list
     crrg-status
     crrg-lineage
     crrg-seal
@@ -137,6 +140,22 @@ resolution. This split is what lets the synthetic fixtures use `ℚ` and other
 Mathlib structure while the shipped semantics stay dependency-free.
 
 The generic core should be as dependency-light as practical. Prefer Lean core types and logic where sufficient. Avoid creating an unnecessary independent Mathlib-version constraint merely for basic CRRG semantics.
+
+**Toolchain portability is a checked claim, not an aspiration (normative).**
+Because the core is Lean-core-only, CRRG is consumed by projects that pin
+*different* Lean toolchains — `proximity-research`'s outer tree and its vendored
+Yukon lower environment already differ. Every such toolchain is listed in
+`scripts/portability-toolchains.txt`, and `scripts/crrg-portability` builds the
+library and the full test suite under each of them, **treating any warning as a
+failure**.
+
+Warnings are failures because every downstream consumer inherits them and cannot
+tell CRRG's from its own. The requirement is not hypothetical: Lean's `defProp`
+and `checkUnivs` linters are core from v4.31 onward, CRRG pinned v4.30.0, and
+twenty-three warnings across the core and the test suite were consequently
+invisible to CRRG's own gate and had to be reported by a downstream project
+(`OPEN-01`). A library that claims portability and checks only one toolchain has
+not checked the claim.
 
 ### 2.3 Downstream `proximity-research` adapter
 
