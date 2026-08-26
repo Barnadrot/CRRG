@@ -10,7 +10,7 @@ echo ""
 
 cd "$CRRG_ROOT"
 
-echo "[1/7] Script hygiene (executable bit recorded in the git index)..."
+echo "[1/8] Script hygiene (executable bit recorded in the git index)..."
 # The gate invokes crrg-audit and crrg-banned directly, so a script that is
 # executable in the working tree but recorded as 100644 in the index breaks the
 # gate on every fresh clone -- while still passing here. That is exactly what
@@ -31,17 +31,17 @@ else
 fi
 echo ""
 
-echo "[2/7] Building CRRG library (primary toolchain)..."
+echo "[2/8] Building CRRG library (primary toolchain)..."
 lake build CRRG
 echo "  OK"
 echo ""
 
-echo "[3/7] Building test suite (primary toolchain)..."
+echo "[3/8] Building test suite (primary toolchain)..."
 lake build CRRGTest Test
 echo "  OK"
 echo ""
 
-echo "[4/7] Cross-toolchain portability (Spec 2.2, 2.4)..."
+echo "[4/8] Cross-toolchain portability (Spec 2.2, 2.4)..."
 # Steps 2 and 3 prove the primary toolchain works, which is the common failure
 # and worth reporting first. This step proves the *portability claim*: CRRG's
 # core is Lean-core-only, so a consumer on any supported toolchain must get a
@@ -50,7 +50,7 @@ echo "[4/7] Cross-toolchain portability (Spec 2.2, 2.4)..."
 "$SCRIPT_DIR/crrg-portability"
 echo ""
 
-echo "[5/7] Declaration audit (verifying core types exist)..."
+echo "[5/8] Declaration audit (verifying core types exist)..."
 TMPFILE="${CRRG_ROOT}/.crrg_check_tmp_$$.lean"
 trap 'rm -f "$TMPFILE"' EXIT
 cat > "$TMPFILE" <<'LEAN'
@@ -80,11 +80,19 @@ lake env lean "$TMPFILE"
 echo "  All core declarations present."
 echo ""
 
-echo "[6/7] Transitive axiom audit (Spec 14.2 item 3)..."
+echo "[6/8] Transitive axiom audit (Spec 14.2 item 3)..."
 "$SCRIPT_DIR/crrg-audit"
 echo ""
 
-echo "[7/7] Banned-construct scan (Spec 14.2 item 2, 5.6, 14.2 item 7)..."
+echo "[7/8] Gate self-tests (the checks must fail when they should)..."
+# A check that silently passes when it should fail is worse than no check: it is
+# reported as evidence. Each tool is exercised on a case it must accept and a
+# case it must reject, and a rejection only counts if it happened for the stated
+# reason.
+"$SCRIPT_DIR/crrg-selftest"
+echo ""
+
+echo "[8/8] Banned-construct scan (Spec 14.2 item 2, 5.6, 14.2 item 7)..."
 "$SCRIPT_DIR/crrg-banned"
 echo ""
 

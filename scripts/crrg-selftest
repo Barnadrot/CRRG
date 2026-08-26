@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+# Self-tests for the gate's own tools.
+#
+# CRRG's argument is that its checks cannot be talked around. A check that
+# silently passes when it should fail is worse than no check at all, because it
+# is *reported* as evidence. `crrg-forbid` had exactly that bug during
+# development: `ConstantInfo.value?` returns `none` for every `theorem` unless
+# asked for opaque values, so the audit saw statements and never proofs, and
+# cheerfully certified that a proof routed straight through the forbidden lemma
+# had not used it. It passed its intended use case while being useless.
+#
+# So each tool is exercised on a case it must accept *and* a case it must
+# reject. A tool that only ever gets run on inputs it passes is untested.
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CRRG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$CRRG_ROOT"
+
+pass=0
+fail=0
+
+# expect <ok|reject> <expected-output-pattern> <description> <command...>
+#
+# A rejection is only a pass if it happened for the *stated reason*. Exit status
+# alone is not enough: during development these tests "passed" while every
+# invocation was actually dying on an unrelated stale-olean error, which is the
+# same class of false confidence the tools themselves exist to prevent.
+expect() {
+  local want="$1" pattern="$2" desc="$3"; shift 3
+  local out status
+  out="$("$@" 2>&1)"; status=$?
+  local okstatus=false reason=false
+  { [ "$want" = ok ] && [ $status -eq 0 ]; } && okstatus=true
+  { [ "$want" = reject ] && [ $status -ne 0 ]; } && okstatus=true
+  grep -qF -- "$pattern" <<< "$out" && reason=true
+  if $okstatus && $reason; then
+    echo "  PASS  $desc"
+    pass=$((pass + 1))
+  else
+    if $okstatus; then
+      echo "  FAIL  $desc (right status, WRONG REASON: expected output to contain \"$pattern\")"
+    else
+      echo "  FAIL  $desc (exit $status, wanted $want)"
+    fi
+    echo "$out" | sed 's/^/          /' | tail -8
+    fail=$((fail + 1))
+  fi
+}
+
+echo "=== CRRG gate self-tests ==="
+echo ""
+
+# The audits read oleans; a build left behind by a *different* toolchain makes
+# every one of them die on an incompatible header, which would otherwise look
+# like a rejection. Rebuild under the primary toolchain first so a failure below
+# is about the tool and not about the tree.
+lake build CRRG CRRGTest >/dev/null 2>&1 || {
+  echo "  cannot build CRRG under the primary toolchain; self-tests cannot run" >&2
+  exit 1
+}
+
+echo "crrg-forbid:"
+
+# `CRRG.Split.toEdge` is a `theorem` whose proof is literally `⟨s.discharge⟩`.
+# This is the regression test for the opaque-value bug: if `crrg-forbid` ever
+# stops reading theorem *proofs*, this reverts to a false pass.
+expect reject "FORBIDDEN CRRG.Split.discharge" \
+  "detects a forbidden constant used in a theorem's proof" \
+  "$SCRIPT_DIR/crrg-forbid" CRRG.Split.toEdge --forbid CRRG.Split.discharge
+
+expect reject "FORBIDDEN CRRG.WitnessSplit.classify" \
+  "detects a forbidden constant reached indirectly" \
+  "$SCRIPT_DIR/crrg-forbid" CRRG.WitnessSplit.toSplit --forbid CRRG.WitnessSplit.classify
+
+expect ok "forbid audit PASSED" \
+  "passes a genuine non-dependency" \
+  "$SCRIPT_DIR/crrg-forbid" CRRG.Edge.id --forbid CRRG.Split.discharge
+
+expect ok "forbid audit PASSED" \
+  "passes a namespace the root does not touch" \
+  "$SCRIPT_DIR/crrg-forbid" CRRG.EscapeMap.closed_parent --forbid-prefix CRRG.GuardedMap
+
+# A prohibition naming something that does not exist forbids nothing, and would
+# otherwise report a clean audit -- the most misleading outcome available.
+expect reject "forbidden name does not exist" \
+  "rejects a misspelled prohibition" \
+  "$SCRIPT_DIR/crrg-forbid" CRRG.Edge.id --forbid CRRG.Split.dischrage
+
+expect reject "no such declaration" \
+  "rejects a root that does not exist" \
+  "$SCRIPT_DIR/crrg-forbid" CRRG.NoSuchDeclaration --forbid CRRG.Split.discharge
+
+expect reject "nothing forbidden" \
+  "refuses a vacuous audit with nothing forbidden" \
+  "$SCRIPT_DIR/crrg-forbid" CRRG.Edge.id
+
+echo ""
+echo "crrg-banned:"
+
+TMPDIR_SELFTEST="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR_SELFTEST"' EXIT
+
+cat > "$TMPDIR_SELFTEST/Clean.lean" <<'LEAN'
+/-- A doc-comment may quote the banned list -- `sorry`, `native_decide` -- without
+tripping the scan, because comments are stripped before matching. -/
+theorem fine : 1 = 1 := rfl
+LEAN
+expect ok "no banned constructs" \
+  "accepts a clean file, and does not trip on the list quoted in a comment" \
+  "$SCRIPT_DIR/crrg-banned" "$TMPDIR_SELFTEST/Clean.lean"
+
+cat > "$TMPDIR_SELFTEST/Hole.lean" <<'LEAN'
+theorem admitted : 1 = 2 := by sorry
+LEAN
+expect reject "sorry (admitted hole)" \
+  "rejects an admitted hole" \
+  "$SCRIPT_DIR/crrg-banned" "$TMPDIR_SELFTEST/Hole.lean"
+
+cat > "$TMPDIR_SELFTEST/Native.lean" <<'LEAN'
+theorem compiled : 2 + 2 = 4 := by native_decide
+LEAN
+expect reject "native_decide" \
+  "rejects native_decide, which trusts the compiler and not the kernel" \
+  "$SCRIPT_DIR/crrg-banned" "$TMPDIR_SELFTEST/Native.lean"
+
+cat > "$TMPDIR_SELFTEST/Aggregate.lean" <<'LEAN'
+def completionRatio : Nat := 63
+LEAN
+expect reject "aggregate progress magnitude" \
+  "rejects an aggregate progress magnitude (§5.6)" \
+  "$SCRIPT_DIR/crrg-banned" "$TMPDIR_SELFTEST/Aggregate.lean"
+
+echo ""
+if [ "$fail" -ne 0 ]; then
+  echo "=== CRRG gate self-tests FAILED ($fail of $((pass + fail))) ==="
+  exit 1
+fi
+echo "=== CRRG gate self-tests PASSED ($pass checks) ==="

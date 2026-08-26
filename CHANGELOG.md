@@ -189,6 +189,62 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-25` / `SPEC-14` — feat: `crrg-forbid`, and self-tests for the gate's own tools
+
+**`crrg-forbid` — "prove this without using that."** Spec §11 item 4 requires an
+agent's task contract to supply "only previously proved theorem constants". The
+complement — which constants the agent may *not* route through — had no
+mechanical enforcement at all, and Stage C cannot run without one.
+
+The reason is specific rather than general. A damaged-proof experiment withholds
+a lemma, but the withheld lemma **cannot be deleted from disk**: the downstream
+Yukon gate byte-compares its vendored submission against a reference copy, so
+removing the theorem would break the very gate the integration is required to
+leave untouched (§2.7). The reference proof therefore stays present and
+importable, and "the agent did not use it" has to be *checked*.
+
+The audit walks the transitive constant closure of a submitted declaration and
+reports the shortest path to each forbidden hit. It completes the trio:
+
+| tool | catches |
+|------|---------|
+| `crrg-audit` | holes that reach the kernel — `sorry`, native decide |
+| `crrg-banned` | escape hatches that do not reach the kernel — source-level |
+| `crrg-forbid` | a *specific named* dependency — closure-level |
+
+Three decisions worth recording:
+
+- **It walks types as well as proof terms.** Restating a goal in terms of the
+  forbidden definition is the obvious way around a value-only audit.
+- **A prohibition naming a declaration that does not exist is an error, not a
+  pass.** A misspelled prohibition forbids nothing and would otherwise report a
+  clean audit — the most misleading outcome the tool could produce. A root that
+  does not exist is rejected for the same reason.
+- **No `partial`.** The walk is a fuelled loop bounded by the constant count.
+  `crrg-banned` rejects `partial` in CRRG's sources, and the gate should not
+  hold itself to a lower standard than it holds the library.
+
+**The bug this nearly shipped with.** The first working version passed every
+audit it was pointed at — including one where the forbidden lemma was used
+directly. `ConstantInfo.value?` returns `none` for **every `theorem`** unless
+asked for opaque values, so the audit was reading statements and never proofs.
+It would have certified that a proof routed straight through the withheld lemma
+had not used it: the single failure this tool must not have, in a tool whose
+entire purpose is to be trusted. `value? (allowOpaque := true)` on the
+non-exporting environment — which is what Lean's own `collectAxioms` does — is
+the fix.
+
+**`crrg-selftest`, added because of that bug.** A check that silently passes when
+it should fail is worse than no check, because it is *reported* as evidence.
+Every gate tool is now exercised on a case it must accept **and** a case it must
+reject — eleven checks, step 7 of `crrg-check`.
+
+And a rejection only counts if it happened *for the stated reason*. Exit status
+alone is not enough: during development these very tests "passed" while every
+invocation was actually dying on an unrelated stale-olean error. The `expect`
+helper takes the substring the output must contain, and reports
+`right status, WRONG REASON` when the status matches but the cause does not.
+
 #### `CHG-24` / `SPEC-13` — feat: ship `#expect_failure` to downstream adapters
 
 External Review 1, Priority 2 ("make failed tests real") and §2.3 ("the negative

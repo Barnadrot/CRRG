@@ -1,0 +1,107 @@
+
+open Lean Elab Command
+
+/-- Every constant occurring in a declaration's type or value.
+
+    Both halves matter. A proof that never mentions a forbidden lemma in its
+    term can still be stated in terms of a forbidden definition, and a statement
+    that quietly renames the thing it was told not to use is exactly the move
+    this audit exists to catch. -/
+def crrgConstsOf (env : Environment) (n : Name) : Array Name :=
+  match env.find? n with
+  | none => #[]
+  | some ci =>
+    let fromType := ci.type.getUsedConstants
+    -- `allowOpaque := true` is load-bearing. Without it `value?` returns `none`
+    -- for *every* `theorem`, so the audit would see only statements and never
+    -- proofs -- and would then certify that a proof routed straight through the
+    -- forbidden lemma had not used it. That is the one failure this tool must
+    -- not have.
+    match ci.value? (allowOpaque := true) with
+    | some v => fromType ++ v.getUsedConstants
+    | none => fromType
+
+/-- Breadth-first walk of the transitive constant closure, retaining for each
+    constant the shortest path by which it was reached.
+
+    The path is the point. "Your proof depends on the lemma you were told not to
+    use" is not actionable on its own; the chain that got there is, because it
+    usually names an intermediate helper the agent did not realise was a
+    wrapper. -/
+def crrgClosureWithPaths (env : Environment) (roots : List Name)
+    (isBanned : Name → Bool) : Array (Name × List Name) := Id.run do
+  let mut seen : NameSet := {}
+  let mut queue : Array (Name × List Name) := #[]
+  let mut hits : Array (Name × List Name) := #[]
+  for r in roots do
+    unless seen.contains r do
+      seen := seen.insert r
+      queue := queue.push (r, [r])
+  let mut idx := 0
+  -- The environment is finite and nothing is enqueued twice, so the constant
+  -- count bounds the number of iterations. A fuelled loop rather than
+  -- `partial`: CRRG bans `partial` in its own sources and the gate should not
+  -- hold itself to a lower standard than it holds the library.
+  let constCount := env.constants.fold (fun acc _ _ => acc + 1) 0
+  for _ in [0:constCount + 1] do
+    if h : idx < queue.size then
+      let (n, path) := queue[idx]
+      idx := idx + 1
+      if isBanned n then
+        hits := hits.push (n, path.reverse)
+      for m in crrgConstsOf env n do
+        unless seen.contains m do
+          seen := seen.insert m
+          queue := queue.push (m, m :: path)
+    else
+      break
+  return hits
+
+run_cmd do
+  let parseNames (s : String) : List Name :=
+    (s.splitOn ",").filterMap fun t =>
+      let t := t.trimAscii.toString
+      if t.isEmpty then none else some t.toName
+
+  let roots := parseNames ((← IO.getEnv "CRRG_FORBID_ROOTS").getD "")
+  let bannedNames := parseNames ((← IO.getEnv "CRRG_FORBID_NAMES").getD "")
+  let bannedPrefixes := parseNames ((← IO.getEnv "CRRG_FORBID_PREFIXES").getD "")
+
+  if roots.isEmpty then
+    throwError "crrg-forbid: no root declarations given"
+  if bannedNames.isEmpty && bannedPrefixes.isEmpty then
+    throwError "crrg-forbid: nothing forbidden; the audit would be vacuous"
+
+  -- The exporting view hides theorem values; `collectAxioms` drops it for the
+  -- same reason, and an audit that inspects proofs has to see them.
+  let env := (← getEnv).setExporting false
+
+  -- A root that does not exist would otherwise audit clean, which is the most
+  -- dangerous possible failure mode for this tool: a typo in a task contract
+  -- would silently certify that a forbidden lemma was not used.
+  for r in roots do
+    if (env.find? r).isNone then
+      throwError m!"crrg-forbid: no such declaration: {r}"
+  for b in bannedNames do
+    if (env.find? b).isNone then
+      throwError m!"crrg-forbid: forbidden name does not exist: {b} \
+        (a misspelled prohibition forbids nothing)"
+
+  let isBanned (n : Name) : Bool :=
+    bannedNames.contains n || bannedPrefixes.any (fun p => p.isPrefixOf n)
+
+  let hits := crrgClosureWithPaths env roots isBanned
+  -- A root may itself be forbidden only if it was named on both sides; that is
+  -- a caller error rather than a finding, but reporting it is more useful than
+  -- silently dropping it, so it is left in.
+
+  logInfo s!"CRRG forbid audit: roots={roots}, forbidden names={bannedNames}, \
+prefixes={bannedPrefixes}"
+
+  if hits.isEmpty then
+    logInfo "CRRG forbid audit PASSED — no forbidden constant is reachable."
+  else
+    let rendered := hits.toList.map fun (n, path) =>
+      s!"\n  FORBIDDEN {n}\n    via {path}"
+    throwError s!"CRRG FORBID AUDIT FAILED — {hits.size} forbidden \
+dependency/dependencies reachable:{String.join rendered}"

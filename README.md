@@ -97,6 +97,10 @@ CRRG never imports project-specific mathematics. The downstream project owns its
 - `scripts/crrg-portability` — clean build under every supported toolchain
 - `scripts/crrg-audit` — transitive axiom audit (Spec §14.2 item 3)
 - `scripts/crrg-banned` — banned-construct scan (Spec §14.2 item 2, §5.6, §14.2 item 7)
+- `scripts/crrg-forbid` — transitive constant-dependency audit: "prove this
+  without using that" (Spec §11 item 4)
+- `scripts/crrg-selftest` — exercises each gate tool on a case it must accept
+  and a case it must reject
 - `scripts/crrg-status` — human-readable state summary
 - `scripts/crrg-lineage` — print axiom dependencies of a declaration
 - `scripts/crrg-seal` — print a candidate's exact type and seal hash before sealing

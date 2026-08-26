@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Transitive constant-dependency audit: "prove this without using that".
+#
+# Usage:
+#   crrg-forbid <decl>[,<decl>...] --forbid <name>[,<name>...]
+#                                  [--forbid-prefix <ns>[,<ns>...]]
+#
+# Environment:
+#   CRRG_IMPORTS   comma-separated modules to import (default: CRRG)
+#   CRRG_WORKDIR   Lake project root to run in (default: the CRRG repo root)
+#
+# Why this exists
+# ---------------
+# Spec §11 item 4 says an agent's task contract supplies "sibling assumptions:
+# only previously proved theorem constants, never prose facts". The complement
+# of that -- which constants an agent may *not* route through -- had no
+# mechanical enforcement, and Stage C cannot run without one.
+#
+# In a damaged-proof experiment the reference lemmas cannot simply be deleted:
+# the Yukon gate byte-compares the vendored submission against a reference copy,
+# so removing the withheld theorem from disk would break the very gate the
+# integration must leave untouched. The proof therefore stays present and
+# importable, and "the agent did not use it" has to be checked rather than
+# assumed.
+#
+# This complements the two existing audits rather than duplicating them:
+#
+#   crrg-audit    catches holes that reach the kernel        (sorry, native)
+#   crrg-banned   catches escape hatches that do not         (source-level)
+#   crrg-forbid   catches a *specific named* dependency      (closure-level)
+#
+# The audit walks types as well as proof terms, so restating a goal in terms of
+# the forbidden definition is caught too, and it reports the shortest path to
+# each hit -- the chain is what tells an agent which innocuous-looking helper
+# was a wrapper around the thing it was told not to use.
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CRRG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+usage() {
+  sed -n '4,12p' "$0" | sed 's/^# \{0,1\}//'
+  exit 1
+}
+
+ROOTS=""
+FORBID=""
+FORBID_PREFIX=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --forbid) FORBID="${FORBID:+$FORBID,}$2"; shift 2 ;;
+    --forbid-prefix) FORBID_PREFIX="${FORBID_PREFIX:+$FORBID_PREFIX,}$2"; shift 2 ;;
+    -h|--help) usage ;;
+    -*) echo "crrg-forbid: unknown option $1" >&2; usage ;;
+    *) ROOTS="${ROOTS:+$ROOTS,}$1"; shift ;;
+  esac
+done
+
+[ -n "$ROOTS" ] || usage
+if [ -z "$FORBID" ] && [ -z "$FORBID_PREFIX" ]; then
+  echo "crrg-forbid: nothing forbidden; the audit would be vacuous" >&2
+  usage
+fi
+
+IMPORTS="${CRRG_IMPORTS:-CRRG}"
+WORKDIR="${CRRG_WORKDIR:-$CRRG_ROOT}"
+
+export CRRG_FORBID_ROOTS="$ROOTS"
+export CRRG_FORBID_NAMES="$FORBID"
+export CRRG_FORBID_PREFIXES="$FORBID_PREFIX"
+
+cd "$WORKDIR"
+
+echo "=== CRRG forbid audit ==="
+echo "Roots:     $ROOTS"
+echo "Forbidden: ${FORBID:-(none)}"
+echo "Prefixes:  ${FORBID_PREFIX:-(none)}"
+echo "Imports:   $IMPORTS"
+echo ""
+
+TMPFILE="${WORKDIR}/.crrg_forbid_tmp_$$.lean"
+trap 'rm -f "$TMPFILE"' EXIT
+
+echo "import Lean" > "$TMPFILE"
+IFS=',' read -ra _mods <<< "$IMPORTS"
+for m in "${_mods[@]}"; do
+  m="$(echo "$m" | tr -d '[:space:]')"
+  [ -n "$m" ] && echo "import $m" >> "$TMPFILE"
+done
+cat "$SCRIPT_DIR/forbid_body.lean.in" >> "$TMPFILE"
+
+lake env lean "$TMPFILE"

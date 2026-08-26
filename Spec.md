@@ -117,8 +117,11 @@ crrg/
     crrg-audit                 -- transitive collectAxioms gate (§14.2 item 3)
     axiom_audit_body.lean.in   -- elaborator body used by crrg-audit
     crrg-banned                -- banned-construct scan (§14.2 item 2)
+    crrg-forbid                -- transitive constant-dependency audit (§11 item 4)
+    forbid_body.lean.in        -- elaborator body used by crrg-forbid
     crrg-portability           -- clean build under every supported toolchain
     portability-toolchains.txt -- the supported toolchain list
+    crrg-selftest              -- the gate's checks must fail when they should
     crrg-status
     crrg-lineage
     crrg-seal
@@ -1243,6 +1246,18 @@ Every research agent receives one exact task file containing:
 2. **Exact target type:** a `theorem` signature or `example` that must compile unchanged.
 3. **Allowed imports / writable files.**
 4. **Sibling assumptions:** only previously proved theorem constants, never prose facts.
+   The complement — which constants the agent may **not** route through — is
+   equally part of the contract and is mechanically enforced by
+   `scripts/crrg-forbid`, which walks the transitive constant closure of a
+   submitted theorem and rejects it if a named declaration or namespace is
+   reachable. This is not merely convenient: a damaged-proof experiment (§15
+   Stage C) withholds a lemma that cannot be deleted from disk, because the
+   downstream project's own gate byte-compares its vendored sources against a
+   reference copy. The withheld proof stays importable, so "the agent did not
+   use it" has to be checked rather than assumed.
+
+   The audit walks **types as well as proof terms**, so restating a goal in
+   terms of the forbidden definition is caught too.
 5. **Success condition:** kernel compilation + axiom audit + exact type-link.
 6. **Failure output:** mathematical counterexample, impossibility theorem, or proposed split — but a proposed split is not promoted until its coverage theorem compiles.
 
