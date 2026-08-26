@@ -53,7 +53,7 @@ the staged implementation plan (§15). Do not reconcile the two.
 | 6.6 | Projection-reducibility usage rule | DONE | `SPEC-09` |
 | 2.3 | Downstream adapter shape | DONE | `CHG-08` |
 | 2.4 | Sibling-checkout development builds | DONE | `CHG-08` |
-| 2.4 | Pinned-SHA integration builds | DEFERRED | needs a published CRRG SHA |
+| 2.4 | Pinned-SHA integration builds | DONE | `CHG-28` — Stage B/C pin `003b7fa`, Stage D pins `af26767` |
 
 ### §5 Trust model
 
@@ -130,7 +130,7 @@ the staged implementation plan (§15). Do not reconcile the two.
 | Req | Requirement | Status | Ref |
 |-----|-------------|--------|-----|
 | 12.1 | Refinement requires a compiled coverage theorem | DONE | `CHG-09` |
-| 12.2 | Invalid refinements rejected | DONE | 49 asserted rejections across the suite |
+| 12.2 | Invalid refinements rejected | DONE | 49 in CRRG, 9 in Stage B, 18 in Stage D |
 | 12.3 | Retirement removes from the live frontier | DONE | `CHG-09` |
 
 ### §14 Verification integration
@@ -159,7 +159,14 @@ the staged implementation plan (§15). Do not reconcile the two.
 | A.7 | DAG reuse: one theorem discharges multiple parents | DONE | `CHG-10` |
 | A.8 | Negative tests for missing branches and weakened children | DONE | `CHG-06` |
 
-Stages B–G are out of scope for the current work and remain `DEFERRED`.
+### §9 Yukon validation programme
+
+| Stage | Requirement | Status | Ref |
+|-------|-------------|--------|-----|
+| B | Known-proof calibration at 6399, decomposition in the **root lineage** | DONE | `crrg-stage-b-yukon` @ `951ef126` |
+| C | Source-visible reconstruction calibration, 7 sealed candidates | DONE | `crrg-stage-c-yukon` @ `339a705e` |
+| D | Frozen iter165 / 7487 historical backtest | DONE | `crrg-stage-d-yukon` @ `2dc5912f` |
+| E–G | Soundness shadow mode and beyond | BLOCKED | forbidden before External Review 2 (§12) |
 
 ### §18 Acceptance criteria (v0.3)
 
@@ -188,6 +195,45 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
+
+#### `CHG-28` — docs: the External Review 2 packet
+
+`audits/EXTERNAL_REVIEW_2_PACKET.md` assembles the review deliverable required by
+§12. It leads with four findings rather than burying them in this log:
+
+1. **A blind agent rediscovered a post-cutoff obstruction, and applied it where
+   the historical lane did not.** Working at the iteration-165 cutoff, an agent
+   refuted the T2 obligation with a weight-one witness. Iteration 176 — eleven
+   iterations later, invisible to it — found the same witness, the same
+   mechanism and the same two magnitudes, and applied it to the *line-count*
+   interface. The agent applied it to the *extension-list* interface, which
+   iteration 181 had explicitly re-examined and listed among the survivors, and
+   whose own commentary still called the hypothesis "an equally open list bound"
+   at iteration 194. It is not open; it is false.
+2. **Route death did not move the target.** `ProtocolClaim 7487 349526 1048576`
+   is byte-identical to what it was. One decomposition of it died;
+   `root_of_T1_T2` remains true and is now known to be vacuous.
+3. **An honest null.** T1 produced substantial certified diagnostics — the
+   second moment unsatisfiable for *every* list size, GS silent for *every*
+   multiplicity — while graph state stayed `UNCHANGED`, which is correct.
+4. **Logical validity is not strategic value.** The T1 agent found a compiled
+   rootward edge that would have been recorded as `REFINED` and declined it,
+   because child and leaf are equal in strength. The kernel cannot distinguish a
+   strength-preserving reshape from a reduction (§10), so admission of a
+   refinement to the active frontier is scheduler and audit policy, not a kernel
+   property.
+
+The artifact-recovery caveat is preserved verbatim: the T2 result is
+mathematically reverified, but byte identity with the first delivered file cannot
+be established. The self-test that destroyed it is fixed and the fix is
+regression-tested; the incident is in the findings section rather than an
+implementation log, because a harness that can delete the results it exists to
+measure is a trust defect and not a bug.
+
+The packet also records what the programme does **not** establish: not that CRRG
+improves research, not that agents resist reward hacking (zero attempts is a null
+result about agents, not a positive result about defences), not that promotion
+cost is known, and not that network isolation is hard on this host.
 
 #### `CHG-27` — feat: `CRRG_SEAL_SCOPE` accepts several namespaces
 
