@@ -18,9 +18,17 @@ private def guardedExample : GuardedMap parentNode passNode failNode where
   onPass n h := ⟨n, of_decide_eq_true h⟩
   onFail n h := ⟨n, of_decide_eq_false h⟩
 
--- Verify branch assignment
-example : (guardedExample.toWitnessSplit.child true) = passNode := rfl
-example : (guardedExample.toWitnessSplit.child false) = failNode := rfl
+-- Verify branch assignment. The child family is an *index* of `WitnessSplit`,
+-- so it is fixed by the conversion's type rather than read out of a field:
+-- `toWitnessSplit`'s signature already names `GuardedMap.child passNode
+-- failNode`, and these check that family assigns the branches as intended.
+example : GuardedMap.child passNode failNode true = passNode := rfl
+example : GuardedMap.child passNode failNode false = failNode := rfl
+
+-- The guard-failure branch is visible in the conversion's *type*, so it cannot
+-- be dropped by an abstraction that stops carrying the checked data (§5.4).
+example : WitnessSplit parentNode (GuardedMap.child passNode failNode) :=
+  guardedExample.toWitnessSplit
 
 -- Both branches are REQUIRED to close the parent.
 -- This is the key property: you cannot close the parent without

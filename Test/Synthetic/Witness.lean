@@ -60,11 +60,14 @@ private abbrev intNode : BadNode := ⟨Int⟩
 private abbrev nonNegNode : BadNode := ⟨{ z : Int // 0 ≤ z }⟩
 private abbrev negNode : BadNode := ⟨{ z : Int // z < 0 }⟩
 
-private def signSplit : WitnessSplit intNode where
-  Branch := Bool
-  child
-    | true => nonNegNode
-    | false => negNode
+/-- The branch family, named separately because `WitnessSplit` is indexed by it.
+    A downstream task assignment can therefore be type-linked to the exact
+    children a split covers, not merely to "some split of this parent". -/
+private abbrev signChild : Bool → BadNode
+  | true => nonNegNode
+  | false => negNode
+
+private def signSplit : WitnessSplit intNode signChild where
   classify := fun (z : Int) =>
     if h : 0 ≤ z then ⟨true, ⟨z, h⟩⟩ else ⟨false, ⟨z, by omega⟩⟩
 

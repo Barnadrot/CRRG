@@ -1,7 +1,7 @@
 # Certified Research Reduction Graph (CRRG)
 ## A kernel-checked partial-progress architecture for the Proximity Grand Challenges
 
-**Status:** v0.6 — first revision reconciled against a building, self-testing implementation. Supersedes v0.5 (spec-only).  
+**Status:** proposed v0.5 — refreshed against live `soundness` branch, iteration 1132 frontier  
 **Repository architecture:** CRRG is a standalone general-purpose Lean repository consumed as a pinned dependency by research projects.  
 **First downstream integration:** private `proximity-research` LDB soundness program (`soundness` branch).  
 **Historical integration target:** existing frozen Disprove side, unchanged by this revision.  
@@ -87,54 +87,39 @@ crrg/
   lakefile.lean
   lean-toolchain
 
-  CRRG/                        -- core library: Lean core only, no Mathlib
-    Basic.lean                 -- Goal, Edge
+  CRRG/
+    Basic.lean
+    Edge.lean
     Split.lean
-    Witness.lean               -- BadNode, WitnessMap, WitnessSplit
+    Witness.lean
     Guarded.lean
     Escape.lean
-    Frontier.lean              -- Frontier + refineLeaf / splitLeaf / retireLeaf
+    Frontier.lean
     Candidate.lean
-    Audit.lean                 -- type-link helpers
+    Audit.lean
 
-  Test/                        -- test library: may depend on Mathlib
-    Support/
-      ExpectFailure.lean       -- #expect_failure negative-test harness
+  Test/
     Synthetic/
       Edge.lean
-      Witness.lean
       Split.lean
-      Refinement.lean
       Guarded.lean
       Escape.lean
       CandidateSeal.lean
       NegativeTests.lean
 
-    YukonReplay/               -- Stage B; not present until Stage A is complete
+    YukonReplay/
       ... integration fixture / adapter ...
 
   scripts/
-    crrg-check                 -- build + tests + declarations + axiom audit
-    crrg-audit                 -- transitive collectAxioms gate (§14.2 item 3)
-    axiom_audit_body.lean.in   -- elaborator body used by crrg-audit
+    crrg-check
     crrg-status
     crrg-lineage
     crrg-seal
     crrg-promote-check
 
-  CHANGELOG.md                 -- conformance matrix and audit trail
   AGENTS.md
   README.md
 ```
-
-`Edge` lives in `Basic.lean` beside `Goal` rather than in its own file: an edge
-is meaningless without a goal, and §13's pilot layout likewise groups them.
-
-The **core library** must remain Lean-core-only. The **test library** may take
-additional dependencies, including Mathlib, because nothing downstream links
-against it; a test-only dependency does not constrain a consumer's version
-resolution. This split is what lets the synthetic fixtures use `ℚ` and other
-Mathlib structure while the shipped semantics stay dependency-free.
 
 The generic core should be as dependency-light as practical. Prefer Lean core types and logic where sufficient. Avoid creating an unnecessary independent Mathlib-version constraint merely for basic CRRG semantics.
 
@@ -271,7 +256,7 @@ Removing CRRG should likewise require only reverting the dependency/adapter inte
 
 ## 3. Source-derived design constraints
 
-### 3.1 What to reuse from ArkLib
+### 2.1 What to reuse from ArkLib
 
 ArkLib treats `OracleReduction/` as its conceptual center. Its key architectural idea is not “protocols are interactive”; it is that a large security theorem is represented by typed intermediate statements, explicit relations, named security properties, and composition theorems.
 
@@ -287,7 +272,7 @@ Relevant patterns:
 
 CRRG should copy these *composition disciplines*, not the IOR execution monad.
 
-### 3.2 What to preserve from `proximity-research`
+### 2.2 What to preserve from `proximity-research`
 
 The private repository already has strong trust engineering:
 
@@ -320,7 +305,7 @@ The architecture should feel like ArkLib CWSS packages, but the semantic currenc
 
 ## 5. Trust model and non-negotiable invariants
 
-### 5.1 Frozen root
+### 4.1 Frozen root
 
 The root remains the existing target, for example:
 
@@ -332,7 +317,7 @@ and eventually an exported ArkLib `ListLowerWitness` via the existing bridge.
 
 No CRRG change is allowed to redefine `Achievable`, the code, the field, the domain, the security threshold, or the radius normalization.
 
-### 5.2 Every edge is Lean
+### 4.2 Every edge is Lean
 
 No prose-only arrow counts.
 
@@ -344,19 +329,19 @@ MomentTarget -> quadratic locator configuration
 
 but that node does not enter the trusted frontier until Lean contains a theorem of the exact implication/classification type.
 
-### 5.3 Every split proves coverage
+### 4.3 Every split proves coverage
 
 An agent may not earn credit for proving cases `A`, `B`, and `C` unless the parent-to-branches theorem proves that every parent counterexample lies in `A ∨ B ∨ C` (or a dependent equivalent).
 
-### 5.4 Guards produce sibling branches
+### 4.4 Guards produce sibling branches
 
 If a transformation is valid only when `p w`, the non-`p` case becomes an explicit branch. Never encode “assume `p`” unless `p` is already a theorem from the parent node.
 
-### 5.5 Exceptions are never deleted
+### 4.5 Exceptions are never deleted
 
 If a reduction either produces the desired structured object or an exceptional object, use an explicit two-way split / escape package. The exception remains on the frontier until separately killed or consumed.
 
-### 5.6 No synthetic global percentage
+### 4.6 No synthetic global percentage
 
 CRRG must not print “63% solved”, closed-leaf percentages, theorem counts, pin counts, or a weighted sum chosen by an agent.
 
@@ -379,9 +364,9 @@ Implement the pilot under the writable soundness subtree first:
 ProximityPrize/Squeeze/Soundness/ResearchGraph/
 ```
 
-Do not modify ArkLib or the frozen Squeeze core while the pilot is in progress.
+Do not modify ArkLib or the frozen Squeeze core for v0.3.
 
-### 6.1 Proposition-level goals
+### 5.1 Proposition-level goals
 
 ```lean
 namespace ProximityPrize.Squeeze.Soundness.ResearchGraph
@@ -392,7 +377,7 @@ structure Goal where
 abbrev Goal.Proved (G : Goal) : Prop := G.claim
 
 /-- `child` is sufficient to discharge `parent`. -/
-structure Edge (parent child : Goal) : Prop where
+structure Edge (parent child : Goal) where
   discharge : child.claim → parent.claim
 
 namespace Edge
@@ -407,72 +392,33 @@ end Edge
 
 Direction convention is deliberately **rootward**: `Edge parent child` means “solve child, then parent is solved.”
 
-The `: Prop` on `Edge` is **normative**, not incidental. Lean would infer it from
-the single proof-valued field, but that inference is fragile: adding any data
-field later would silently move `Edge` into `Type` and change the universe of
-every downstream signature mentioning it. A certified edge carries no data by
-design — metadata belongs on the candidate record (§8.3).
-
-**Universe discipline (normative).** `Goal` is universe-free: its `claim` is a
-`Prop`. Every *index* or *witness* type in the calculus — `BadNode.Witness`,
-`Split.Branch`, `WitnessSplit`'s branch index, `Frontier.Task` — is `Type u`,
-not `Type 0`. A research counterexample is not guaranteed to live in the lowest
-universe: any witness that itself carries a type (a family, a code, a
-category-like structure) is at least `Type 1`, and a monomorphic calculus could
-not host it at all. Sibling nodes of one refinement share a universe; a
-`WitnessMap` may cross universes.
-
-Universe polymorphism is only worth the cost if the levels are genuinely
-independent, and Lean's `checkUnivs` linter reports the case where they are
-not: a universe that reaches a declaration's type *only* inside a `max`, never
-on its own, is over-parameterisation. This is a real constraint on how the
-calculus is written, and it is not one CRRG can opt out of — the linter is core
-Lean from v4.31 onward, and `set_option linter.checkUnivs false` is itself a
-hard error on older toolchains, so a library that must build under both cannot
-suppress it. Where a universe would otherwise occur only inside a `max`, move
-the type it belongs to out of the structure's fields and into its **indices**;
-see §6.3.
-
-The two `trivial` convenience constructors (`Split.trivial`, `Frontier.trivial`)
-are the deliberate exception: they are pinned to `Type 0`. A convenience
-constructor whose universe nothing pins forces every downstream definition built
-from it to become polymorphic, and the level is then unsolvable at the use site.
-Anything needing a trivial node at a higher universe writes the structure
-instance directly.
-
-Ordinary `Type 0` usage must require no universe annotations anywhere. This is a
-testable property, not an aspiration.
-
-### 6.2 Exact finite/dependent splits
+### 5.2 Exact finite/dependent splits
 
 ```lean
-universe u
-
 structure Split (parent : Goal) where
-  Branch : Type u
+  Branch : Type
   child : Branch → Goal
   discharge : (∀ i, (child i).claim) → parent.claim
 ```
 
 A split is not a collection of tasks; it is a proof that the collection of tasks is sufficient.
 
-### 6.3 Counterexample nodes (preferred for structural research)
+### 5.3 Counterexample nodes (preferred for structural research)
 
 Proposition-level goals are necessary for retrofitting existing theorems, but new structural decompositions should preferentially use explicit counterexample types.
 
 ```lean
-universe u v w
-
 structure BadNode where
-  Witness : Type u
+  Witness : Type
 
-abbrev BadNode.Closed (N : BadNode) : Prop := N.Witness → False
+abbrev BadNode.Closed (N : BadNode) : Prop := IsEmpty N.Witness
 
-structure WitnessMap (parent : BadNode.{u}) (child : BadNode.{v}) where
+structure WitnessMap (parent child : BadNode) where
   map : parent.Witness → child.Witness
 
-structure WitnessSplit (parent : BadNode.{u}) {Branch : Type v}
-    (child : Branch → BadNode.{w}) where
+structure WitnessSplit (parent : BadNode) where
+  Branch : Type
+  child : Branch → BadNode
   classify : parent.Witness → Σ i, (child i).Witness
 ```
 
@@ -484,56 +430,13 @@ theorem WitnessMap.closed_parent
     child.Closed → parent.Closed
 
 theorem WitnessSplit.closed_parent
-    (s : WitnessSplit parent child) :
-    (∀ i, (child i).Closed) → parent.Closed
+    (s : WitnessSplit parent) :
+    (∀ i, (s.child i).Closed) → parent.Closed
 ```
 
 This is the strongest correctness shape for research case splits: exhaustiveness is represented by an actual classifier from every parent witness into a branch.
 
-**The branch family is an index, not a field (normative).** `WitnessSplit` is
-indexed by the child family it covers, so `WitnessSplit parent child` names the
-decomposition in its own type. Three reasons, in descending order of weight:
-
-1. **Type-linking.** §14.2 item 5 requires each task theorem to be type-linked
-   to the exact leaf declaration. A split whose children are fields can only be
-   linked to "some decomposition of this parent"; a split indexed by its
-   children states which ones in the signature, so a `#check` is the audit.
-2. **Consistency.** Every other relational type in the calculus is already
-   indexed by both endpoints: `Edge parent child`, `WitnessMap parent child`,
-   `GuardedMap parent pass fail`, `EscapeMap parent main escape`. `WitnessSplit`
-   was the exception.
-3. **§6.6 item 4 and universe hygiene.** The index type is incidental — the
-   *classification* is the point of a `WitnessSplit` — so §6.6 item 4 already
-   prescribes making it a parameter. As fields, `Branch` and `child` also
-   contributed their universes only inside a `max`, which is the
-   over-parameterisation §6.1 describes. As indices they occur on their own, so
-   the three universes stay independent. Collapsing them instead would have
-   cost real generality: `GuardedMap`'s branch index is `Bool : Type 0` while
-   its pass and fail nodes may sit at any level.
-
-The operational consequence is that `GuardedMap` and `EscapeMap` each expose a
-named two-branch child family (`GuardedMap.child pass fail`,
-`EscapeMap.child main escape`) which appears in the type of their conversion to
-a `WitnessSplit`. This is the strongest available form of §5.4 and §5.5: the
-guard-failure branch and the exceptional branch are not merely present in a
-proof, they are part of a signature, so deleting one is a type error.
-
-`Split` deliberately keeps its `Branch` and `child` as fields. It is
-universe-clean as written, and §7.4 already records the accepted mitigation for
-the projection hazard on `Frontier.Task` — decidability passed explicitly rather
-than synthesized. Changing either would be churn without a corresponding gain.
-
-**`Closed` is deliberately not Mathlib's `IsEmpty`.** §2.2 requires the CRRG core
-to be dependency-light and to avoid an independent Mathlib-version constraint,
-which would otherwise propagate to every downstream consumer. `IsEmpty α` is a
-one-field structure wrapping exactly `α → False`, so the two are the same
-proposition and every theorem above holds verbatim; only the introduction and
-elimination syntax differs. CRRG never needs `Closed` to be found by instance
-search — it is always supplied explicitly as a hypothesis — so nothing is lost
-by dropping the class. Downstream projects that do depend on Mathlib may bridge
-the two with `⟨·⟩` and `IsEmpty.false` in a single line.
-
-### 6.4 Explicit escape package
+### 5.4 Explicit escape package
 
 Semantically this is a two-way `WitnessSplit`, but the name matters operationally:
 
@@ -546,7 +449,7 @@ Use it whenever a proof says “either the desired normalization succeeds, or an
 
 The orchestrator must create one task for `main` and one task for `escape`; the latter cannot disappear into prose.
 
-### 6.5 Guarded transformation helper
+### 5.5 Guarded transformation helper
 
 A guarded transform must consume both truth values:
 
@@ -561,50 +464,11 @@ A generic conversion produces a `WitnessSplit` with two branches.
 
 This is the static analogue of ArkLib’s guarded-verifier discipline.
 
-### 6.6 Projection reducibility (normative usage rule)
-
-Several CRRG types carry a `Type`- or `Prop`-valued **field** that user code then
-projects: `BadNode.Witness`, `Split.Branch`, `Frontier.Task`,
-`MonotoneFamily.Stronger`, `MonotoneFamily.claim`. Lean's instance search,
-`decide`, and `omega` run at reducible/instances transparency and will **not**
-unfold a plain `def`. So given
-
-```lean
-def myNode : BadNode := ⟨Nat⟩
-```
-
-the type `myNode.Witness` does not reduce to `ℕ` during instance search, and
-numerals, `<`, `decide` and `omega` all fail against it with errors that name the
-projection rather than the cause.
-
-This is not a Lean defect and not something CRRG can abstract away — the field
-*is* the abstraction in each of these cases. It is a usage rule, and it bit the
-implementation four separate times, so it is recorded here rather than
-rediscovered:
-
-1. **Declare node/family fixtures with `abbrev`, not `def`,** when their
-   projected fields appear in goals solved by automation.
-2. **Where a plain `def` is wanted** — as a downstream adapter will normally use
-   for its predicates — restate the goal in unfolded form first:
-   `by show 2 * 1900 ≤ denom; decide`. The kernel unfolds `def`s happily; only
-   the search procedures do not.
-3. **Annotate binders at their concrete type** when a tactic must see through
-   them: `classify := fun (z : Int) => ...` rather than `classify z := ...`,
-   otherwise `omega` does not recognise `z` as an integer atom.
-4. **Where the type is incidental rather than the point of the abstraction, make
-   it a parameter instead of a field.** `MonotoneFamily` takes `Param` as a
-   parameter for exactly this reason. `BadNode` cannot: a bad node *is* its
-   witness type.
-
-CRRG's own API takes decidability as an explicit argument wherever it needs it
-(§7.4), for the same reason: `[DecidableEq F.Task]` cannot be synthesized against
-a frontier declared with `def`.
-
 ---
 
 ## 7. Root package and live frontier
 
-### 7.1 Root goal
+### 6.1 Root goal
 
 For each active rung, define the exact goal once:
 
@@ -623,7 +487,7 @@ def radius (d : ℕ) : ℚ := d / 2097152
 
 with a frozen/type-linked theorem `radius d = ...` where needed.
 
-### 7.2 Current exact root seam on `soundness`
+### 6.2 Current exact root seam on `soundness`
 
 The live branch already contains the correct two-premise composition theorem in
 `ProximityPrize/Squeeze/Soundness/MomentRecovery.lean`:
@@ -670,11 +534,11 @@ only after Lean contains the full source-faithful edge from that theorem,
 through the H2 count and rank-free H1/H0 specializations, into one or both of
 the two certified leaves above.
 
-### 7.3 Frontier package
+### 6.3 Frontier package
 
 ```lean
 structure Frontier (root : Goal) where
-  Task : Type u
+  Task : Type
   leaf : Task → Goal
   closeRoot : (∀ t, (leaf t).claim) → root.claim
 ```
@@ -703,45 +567,16 @@ def current971426 : Frontier target971426 where
 
 **Important:** task count has no reward meaning.
 
-### 7.4 Refinement
+### 6.4 Refinement
 
-Generic, leaf-preserving frontier refinement is **normative**, not deferred. A
-refinement must:
+Provide generic frontier refinement later, after the pilot:
 
 - replace one leaf by a single child using an `Edge`;
 - replace one leaf by multiple children using a `Split`;
-- **preserve all other leaves**;
+- preserve all other leaves;
 - derive the new `closeRoot` automatically.
 
-```lean
-def Frontier.refineLeaf {root : Goal} (F : Frontier root) (dec : DecidableEq F.Task)
-    (t₀ : F.Task) {child : Goal} (e : Edge (F.leaf t₀) child) : Frontier root
-
-def Frontier.splitLeaf {root : Goal} (F : Frontier root) (dec : DecidableEq F.Task)
-    (t₀ : F.Task) (s : Split (F.leaf t₀)) : Frontier root
-
-def Frontier.retireLeaf {root : Goal} (F : Frontier root) (dec : DecidableEq F.Task)
-    (t₀ : F.Task) (proof : (F.leaf t₀).claim) : Frontier root
-```
-
-`splitLeaf`'s new task set is `{t : F.Task // t ≠ t₀} ⊕ s.Branch`: the siblings
-survive as the left summand and the coverage proof carried by `s` is
-structurally required, which is what makes §12.1 enforceable rather than
-advisory.
-
-`retireLeaf` implements §12.3. It demands an actual proof of the retired leaf, so
-removing an obligation from the live frontier can never be a bookkeeping edit.
-
-**Do not use `Frontier.compose` for leaf refinement.** It re-roots an entire
-frontier through an `Edge` and its result carries only the inner frontier's
-leaves; every sibling of the outer frontier is discarded. It is sound but it is
-not a refinement operator.
-
-**Decidability is an explicit argument, not an instance.** Instance resolution
-runs at `instances` transparency and will not unfold a frontier declared with a
-plain `def` — which is exactly how downstream adapters declare theirs — so
-`[DecidableEq F.Task]` fails to synthesize on the intended usage. Callers pass
-`inferInstanceAs (DecidableEq MyTask)`.
+For v0.2 this can be manual if dependent-index manipulation becomes a time sink. Correctness of `closeRoot` matters more than elegance.
 
 ---
 
@@ -751,7 +586,7 @@ The certified CRRG must remain brutally literal: every certified edge is a Lean 
 
 The candidate layer exists to expose formalization debt without pretending that debt has already been paid.
 
-### 8.1 Hard invariant: there are no prose edges inside CRRG
+### 7.1 Hard invariant: there are no prose edges inside CRRG
 
 A candidate edge is **not** a sentence such as:
 
@@ -796,7 +631,7 @@ Only after that theorem passes the ordinary build, axiom audit, and type-link ch
 
 **Rule:** if an arrow does not have an exact Lean target type, it is not part of CRRG at all.
 
-### 8.2 Candidate edges must expose all composition debt
+### 7.2 Candidate edges must expose all composition debt
 
 A syntactically exact proposition can still hide the actual research gap by introducing extra hypotheses casually.
 
@@ -838,72 +673,23 @@ def E3Target : Prop :=
 
 Both are acceptable. What is forbidden is describing the edge as "H2 -> FpMomentBudget" while silently relying on untracked side conditions.
 
-### 8.3 Candidate record
+### 7.3 Candidate record
 
 A candidate edge should carry machine-readable metadata in addition to its exact proposition.
 
-The record is **not** a single mutable structure with a `status` field. Storing
-the target proposition and the status side by side as ordinary fields makes every
-illegal transition expressible, and CRRG's whole claim is that illegal
-transitions are not expressible. The normative encoding indexes the type by the
-sealed proposition and gives each lifecycle state its own type:
+Conceptually:
 
 ```lean
-/-- Provenance fixed at seal time, never mutated. -/
-structure SealRecord where
+structure CandidateEdge where
   id : String
   sourceIds : List String
   targetId : String
-  expectedTheoremName : String
-  sealHash : String        -- sha256 of the exact printed target type
-  sourceCommit : String
-  createdAt : String
-
-/-- DRAFT. Target is a field, because a draft may still change. -/
-structure DraftCandidate where
-  id : String
-  sourceIds : List String
-  targetId : String
-  expectedTheoremName : String
   targetProp : Prop
-
-/-- SEALED_UNVERIFIED. Target is a *type parameter*: it can no longer change. -/
-structure SealedCandidate (targetProp : Prop) where
-  record : SealRecord
-
-/-- The terminal states. `certified` and `refuted` are kernel-checked. -/
-inductive Outcome (P : Prop)
-  | certified (proof : P) (theoremSha : String)
-  | refuted (disproof : ¬ P) (reason : String)
-  | invalid (reason : String)
-  | malformed (reason : String)
-  | superseded (bySealId : String) (reason : String)
-
-/-- History: the exact proposition, its provenance, and its final status. -/
-structure ResolvedCandidate (P : Prop) where
-  sealed : SealedCandidate P
-  outcome : Outcome P
+  expectedTheoremName : String
+  status : CandidateStatus
 ```
 
-`CandidateStatus` still exists, but only for **rendering**. It is derived from
-the value's type via `Outcome.status`, never stored as mutable state, and
-nothing in CRRG accepts a `CandidateStatus` as evidence of anything.
-
-Three properties follow structurally rather than by convention:
-
-- **a sealed target cannot be weakened in place** — `SealedCandidate P` and
-  `SealedCandidate Q` are different types (§8.5);
-- **promotion requires the exact proposition** — `certified` carries a proof of
-  the very `P` the seal is indexed by;
-- **a resolved candidate cannot be promoted** — `Outcome` has no transition out
-  of it, and `Outcome.status_not_promotable` is a theorem.
-
-**A claimed refutation must carry a disproof.** `refuted` requires `¬ P`.
-"The intended route is contradicted, but I have no disproof" is `invalid`, which
-makes no claim about `P` at all. Conflating the two would let an agent close a
-task by asserting falsity.
-
-The semantic requirements the encoding must satisfy are:
+The exact implementation may avoid storing `Prop` in a runtime manifest and instead use Lean declarations plus a generated registry. The semantic requirements are:
 
 ```text
 candidate ID
@@ -917,7 +703,7 @@ status
 
 The prose rationale, research motivation, and expected proof mechanism may live beside the record but are not graph semantics.
 
-### 8.4 Candidate lifecycle
+### 7.4 Candidate lifecycle
 
 Candidate edges have a strict lifecycle:
 
@@ -949,13 +735,7 @@ Definitions:
 
 A sealed target may never be weakened in place. If the target changes, create a new candidate ID and retain the old one.
 
-This is enforced by the type, not by review: the proposition is a parameter of
-`SealedCandidate`, so "changing it" produces a value of a different type rather
-than a mutation. The `sealHash` in the seal record covers the complementary
-attack of redefining the underlying Lean declaration while keeping its name — the
-kernel cannot see that, but the hash printed by `scripts/crrg-seal` does.
-
-### 8.5 Anti-proxy rule for candidate promotion
+### 7.5 Anti-proxy rule for candidate promotion
 
 Once an agent is assigned a sealed candidate, the proposition is immutable for that attempt.
 
@@ -983,7 +763,7 @@ new sealed candidate E23Target includes X explicitly
 
 This is the candidate-layer analogue of the frozen Grand Challenge root.
 
-### 8.6 Candidate promotion is objective formalization progress, not prize progress
+### 7.6 Candidate promotion is objective formalization progress, not prize progress
 
 A transition
 
@@ -1005,11 +785,7 @@ E17: SEALED_UNVERIFIED -> MALFORMED
 
 may be highly valuable. It proves that the research blueprint was missing a real obligation.
 
-### 8.7 Certified graph vs typed promotion queue
-
-`CRRG.Report` renders the two separately and provides no operation that merges
-them: `QueueReport` and `FrontierReport` are unrelated types, and a
-`PromotionQueue` is not a `Frontier`, so a queue entry cannot close a root.
+### 7.7 Certified graph vs typed promotion queue
 
 The user-facing or agent-facing state should distinguish them visually and semantically:
 
@@ -1040,7 +816,7 @@ Only the certified frontier can close the root.
 
 The typed promotion queue guides research and formalization, but its edges contribute zero trusted root closure until promoted.
 
-### 8.8 Candidate graph history
+### 7.8 Candidate graph history
 
 Every sealed candidate should be preserved with:
 
@@ -1056,25 +832,9 @@ This history is useful both for research provenance and for measuring whether CR
 
 ---
 
-## 9. LDB-specific counterexample vocabulary — **downstream adapter only**
+## 9. LDB-specific counterexample vocabulary
 
-> **Boundary warning.** Everything in this section is `proximity-research`
-> vocabulary: `Word`, `KBField`, `targetCode`, `listAt`, `radius`, `Achievable`,
-> `securityBits`. §2.1 states that CRRG "must never import" any of these, and
-> §2.2 requires the core to stay dependency-light. **None of this section may be
-> implemented inside the standalone CRRG package.** It specifies declarations
-> that belong to the downstream `ResearchGraph` adapter, alongside `Root971426`
-> and `Current`, and it is recorded here only because the counterexample
-> vocabulary is the long-term semantic model for the LDB program.
->
-> The generic machinery this section builds on — `BadNode`, `WitnessMap`,
-> `WitnessSplit`, `EscapeMap`, `GuardedMap` — is in CRRG (§6.3–§6.5). The
-> LDB-specific instantiation below is not.
->
-> If a future reader finds `ListViolation` inside the CRRG package, that is a
-> boundary violation and should be moved out, not blessed.
-
-After the proposition-level pilot works, the downstream adapter should introduce an explicit violation object aligned with the existing executable `listAt` API.
+After the proposition-level pilot works, introduce an explicit violation object aligned with the existing executable `listAt` API.
 
 ```lean
 structure ListViolation (d B : ℕ) where
@@ -1084,7 +844,7 @@ structure ListViolation (d B : ℕ) where
   tooLarge : B < family.card
 ```
 
-Then prove an adapter theorem of the form (again, downstream):
+Then prove an adapter of the form:
 
 ```lean
 theorem achievable_of_no_listViolation
@@ -1098,7 +858,7 @@ The proof should reuse the current finite-subfamily interpretation of `ListDecod
 
 Once this exists, the entire soundness program can be read as normalization of a hypothetical `ListViolation d B` into increasingly rigid counterexample types.
 
-That is the recommended long-term semantic model — for the downstream adapter. CRRG itself only supplies the generic `BadNode`/`WitnessSplit` calculus that this instantiates.
+That is the recommended long-term semantic model.
 
 ---
 
@@ -1106,7 +866,7 @@ That is the recommended long-term semantic model — for the downstream adapter.
 
 CRRG deliberately distinguishes **structural progress** from **quantitative progress**.
 
-### 10.1 Structural progress
+### 8.1 Structural progress
 
 Examples:
 
@@ -1118,7 +878,7 @@ These are valuable if and only if the split/classifier is Lean-certified.
 
 Reward: the exact split theorem lands. No scalar magnitude.
 
-### 10.2 Quantitative progress
+### 8.2 Quantitative progress
 
 For fixed node families with a mathematically canonical order, expose that order.
 
@@ -1137,57 +897,13 @@ An agent assigned to such a family may receive local numerical reward only when 
 
 Never compare unrelated local currencies (e.g. “3 bits of moment slack” versus “one case eliminated”) by a hand-chosen exchange rate.
 
-Both conditions are **structural**, not editorial:
-
-```lean
-structure MonotoneFamily (Param : Type u) where
-  Stronger : Param → Param → Prop
-  claim : Param → Prop
-  stronger_refl : ∀ p, Stronger p p
-  stronger_trans : ∀ {a b c}, Stronger a b → Stronger b c → Stronger a c
-  /-- The monotonicity theorem, as a field: a family cannot exist without it. -/
-  monotone : ∀ {a b}, Stronger a b → claim a → claim b
-
-def MonotoneFamily.StrictlyStronger (F : MonotoneFamily Param) (a b : Param) : Prop :=
-  F.Stronger a b ∧ ¬ F.Stronger b a
-
-/-- The only numerical reward CRRG recognises. -/
-structure Progress (F : MonotoneFamily Param) (old new : Param) where
-  improvement : F.StrictlyStronger new old
-  proof : F.claim new
-```
-
-- **The monotonicity theorem is a field**, so declaring a family without proving
-  it is impossible.
-- **`Progress` is indexed by the family**, so progress in one family is not
-  progress in another — even when both are parameterised by `ℕ` and both improve
-  the same numerals. There is deliberately **no** operation that adds, averages,
-  or exchanges progress across families. The absence of that operation *is* the
-  prohibition on exchange rates.
-- **`Progress.implies_old` is a theorem**: a proof at a strictly stronger
-  parameter still proves the old parameter's claim. An agent can never be
-  rewarded for an "improvement" that abandons what was already established.
-- `StrictlyStronger` is irreflexive, so re-proving the same parameter earns
-  nothing.
-
-`Stronger` requires reflexivity and transitivity. Without them "strictly
-stronger" does not compose and a chain of improvements cannot be certified as a
-single one.
-
-**Declaration idiom.** Declare a family with `abbrev`, not `def`. `Stronger` and
-`claim` are structure fields, so `myFamily.Stronger a b` reduces to the intended
-relation only when `myFamily` is reducible; behind a plain `def`, `omega` and
-`decide` see an opaque atom and fail. This is the same projection-reducibility
-hazard noted for frontiers in §7.4, and it applies wherever a `Type`- or
-`Prop`-valued field is projected in user code.
-
-### 10.3 Optional certified root-bound evaluator
+### 8.3 Optional certified root-bound evaluator
 
 A later phase may attach fallback bounds to every branch and compose them by exact `sum`, `max`, or product lemmas, producing a valid root upper bound even before the threshold is reached.
 
 This would yield a dense scalar signal such as an actual proved `Lambda ≤ B_current`.
 
-Do **not** implement this until the decomposition naturally provides valid fallback bounds. A fake scalar is worse than binary tasks.
+Do **not** implement this in v0.2 unless the decomposition naturally provides valid fallback bounds. A fake scalar is worse than binary tasks.
 
 ---
 
@@ -1222,7 +938,7 @@ This is enough to give an agent a correct reward signal without inventing a glob
 
 A graph change is a mathematical event, not project-management metadata.
 
-### 12.1 Valid refinement
+### 10.1 Valid refinement
 
 To replace leaf `L` by children `C_i`, the same commit must contain:
 
@@ -1234,7 +950,7 @@ or preferably a witness classifier proving exhaustive coverage.
 
 Only after that theorem builds may the orchestrator assign `C_i` as independent tasks.
 
-### 12.2 Invalid refinement
+### 10.2 Invalid refinement
 
 Reject any change that does only one of:
 
@@ -1245,7 +961,7 @@ Reject any change that does only one of:
 - replaces a false historical premise by a nearby plausible premise without rebuilding the parent edge;
 - measures “fraction of cases” without a certified measure/partition theorem.
 
-### 12.3 Retirement
+### 10.3 Retirement
 
 A historical route can remain in source, but it must be removed from the **live frontier** when:
 
@@ -1286,11 +1002,11 @@ No frozen-file changes are required for the pilot.
 
 ## 14. Verification integration
 
-### 14.1 Keep `verify.sh` prize output unchanged
+### 12.1 Keep `verify.sh` prize output unchanged
 
 Do not add intermediate scores to its `TARGET` section.
 
-### 14.2 Add a separate graph gate
+### 12.2 Add a separate graph gate
 
 `verify_research_graph.sh` should:
 
@@ -1305,38 +1021,9 @@ Do not add intermediate scores to its `TARGET` section.
 6. print task identifiers with only `OPEN` / `CLOSED` / `INVALID` states;
 7. print no aggregate count or percentage.
 
-Items 2, 6 and 7 have concrete implementations rather than being left to
-reviewer discipline.
-
-**Item 2 — banned constructs.** `scripts/crrg-banned` scans Lean sources for
-escape hatches that keep a declaration axiom-clean while defeating the trust
-model: `sorry`, `native_decide` (trusts the compiler, not the kernel), `axiom`,
-`unsafe`, `partial`, and `@[implemented_by]` / `@[extern]` (which replace a
-verified definition at runtime). Lean comments are stripped before matching, so a
-doc-comment may quote this list without tripping the scan. This is complementary
-to the axiom audit, which catches only what reaches the kernel.
-
-**Items 6 and 7 — reporting.** `CRRG.Report` provides `TaskStatus` with exactly
-three constructors and `FrontierReport`, whose `render` emits **one line per
-task and nothing else**:
-
-```lean
-theorem FrontierReport.render_length (r : FrontierReport root) :
-    r.render.length = r.tasks.length
-```
-
-A summary line, a count, or a percentage would make the output longer than the
-task list, so surfacing one requires breaking this theorem. `FrontierReport` has
-no aggregate field to hold such a value, and `crrg-banned` additionally rejects
-identifiers such as `percentage`, `progressScore` and `completionRatio`.
-
-Task count remains available to the orchestrator as `FrontierReport.taskCount`,
-because iterating over tasks is legitimate. It is deliberately not part of
-`render`: §7.3 states that task count has no reward meaning.
-
 The orchestrator may use the individual status of the task it assigned as the reward signal.
 
-### 14.3 Graph integrity
+### 12.3 Graph integrity
 
 `Current.lean` is the authority for the live graph. `state/research_graph/CURRENT.md` is generated commentary.
 
@@ -1617,7 +1304,7 @@ For CRRG work, use:
 `merger` is historical for this pilot. Do not read it to determine the live
 Soundness frontier.
 
-The existing Disprove side is left exactly as-is by CRRG. Its frozen upper
+The existing Disprove side is left exactly as-is by CRRG v0.3. Its frozen upper
 bound and existing graph/ledger role remain untouched.
 
 ### Phase 1 — standalone CRRG infrastructure
@@ -1750,7 +1437,7 @@ The ArkLib precedent suggests the right upstream threshold: generic abstractions
 
 ---
 
-## 18. Acceptance criteria for v0.6
+## 18. Acceptance criteria for v0.3
 
 The pilot is successful if all of the following hold:
 
@@ -1777,7 +1464,7 @@ The pilot is successful if all of the following hold:
 
 ---
 
-## 19. Design summary
+## 18. Design summary
 
 CRRG should make this transformation:
 
@@ -1828,7 +1515,7 @@ That gives agents a dense, correct local reward while preserving the only global
 
 ---
 
-## 20. Source map used for this spec
+## 19. Source map used for this spec
 
 ### ArkLib (inspected at commit `14a4b351d154cacd7b01ff58bf505c1572112098`)
 

@@ -21,14 +21,21 @@ structure EscapeMap (parent : BadNode.{u}) (main escape : BadNode.{v}) where
 
 namespace EscapeMap
 
+/-- The two-branch child family of an escape split: `true` is the main node,
+    `false` is the exceptional node.
+
+    Named rather than inlined because `WitnessSplit` is indexed by its child
+    family, so this function appears in `toWitnessSplit`'s type — which is
+    exactly where Spec §5.5 wants the exception to be: impossible to delete
+    without changing a signature. -/
+def child (main escape : BadNode.{v}) : Bool → BadNode.{v}
+  | true => main
+  | false => escape
+
 /-- Convert an `EscapeMap` to a `WitnessSplit` with two branches. -/
 def toWitnessSplit {parent : BadNode.{u}} {main escape : BadNode.{v}}
     (e : EscapeMap parent main escape) :
-    WitnessSplit parent where
-  Branch := Bool
-  child
-    | true => main
-    | false => escape
+    WitnessSplit parent (EscapeMap.child main escape) where
   classify w :=
     match e.classify w with
     | Sum.inl m => ⟨true, m⟩

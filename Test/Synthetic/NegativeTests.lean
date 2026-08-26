@@ -108,13 +108,36 @@ example (hMain : escMain.Closed) : escParent.Closed :=
 
 /-! ## 6. A classifier must be total over parent witnesses. -/
 
-/- Negative: a `WitnessSplit` classifier that handles only one constructor. -/
-#expect_failure
-private def partialClassifier : WitnessSplit ⟨Bool⟩ where
-  Branch := Bool
-  child _ := ⟨Unit⟩
+private abbrev twoWayChild : Bool → BadNode
+  | true => ⟨Unit⟩
+  | false => ⟨Unit⟩
+
+-- Positive control: a total classifier is accepted.
+private def totalClassifier : WitnessSplit ⟨Bool⟩ twoWayChild where
   classify
     | true => ⟨true, ()⟩
+    | false => ⟨false, ()⟩
+
+/- Negative: a `WitnessSplit` classifier that handles only one constructor.
+Stated against the same child family as the positive control, so the rejection
+is about the missing `false` case and not about a mistyped signature. -/
+#expect_failure
+private def partialClassifier : WitnessSplit ⟨Bool⟩ twoWayChild where
+  classify
+    | true => ⟨true, ()⟩
+
+/- Negative: the classifier must land in the branch it names. Sending a witness
+to branch `true` while supplying a `false`-branch witness is rejected, so the
+`Sigma` really does tie each witness to its own branch. -/
+private abbrev skewChild : Bool → BadNode
+  | true => ⟨Empty⟩
+  | false => ⟨Unit⟩
+
+#expect_failure
+private def misroutedClassifier : WitnessSplit ⟨Bool⟩ skewChild where
+  classify
+    | true => ⟨true, ()⟩
+    | false => ⟨false, ()⟩
 
 /-! ## 7. A frontier must actually use all of its leaves. -/
 

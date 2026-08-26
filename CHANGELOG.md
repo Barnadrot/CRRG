@@ -188,6 +188,69 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-21` / `SPEC-10` — feat: `WitnessSplit` is indexed by its branch family
+
+`OPEN-01` half two. The old shape carried the decomposition in fields:
+
+```lean
+structure WitnessSplit (parent : BadNode.{u}) where
+  Branch : Type v
+  child : Branch → BadNode.{w}
+  classify : parent.Witness → Σ i, (child i).Witness
+```
+
+so `v` and `w` reached the structure's sort only inside a `max`, never on their
+own — which is what `checkUnivs` reports. The new shape moves the branch family
+into the indices:
+
+```lean
+structure WitnessSplit (parent : BadNode.{u}) {Branch : Type v}
+    (child : Branch → BadNode.{w}) where
+  classify : parent.Witness → Σ i, (child i).Witness
+```
+
+**This is not linter appeasement.** Spec §6.6 item 4 already says "where the
+type is incidental rather than the point of the abstraction, make it a parameter
+instead of a field", and cites `MonotoneFamily.Param` as the precedent. A
+`WitnessSplit`'s index type is exactly that case: the classification is the
+point. §6.6 simply never applied its own rule here. The linter and the spec
+agree, and the change is recorded normatively as `SPEC-10`.
+
+What it buys beyond the warning:
+
+- **The type names the decomposition.** `WitnessSplit parent child` can be
+  type-linked to the exact children it covers (§14.2 item 5). The old shape
+  could only be linked to "some decomposition of this parent".
+- **Consistency.** `Edge`, `WitnessMap`, `GuardedMap` and `EscapeMap` are all
+  indexed by both endpoints; `WitnessSplit` was the lone exception.
+- **§5.4 and §5.5 get stronger.** `GuardedMap.child pass fail` and
+  `EscapeMap.child main escape` are now named families appearing in the *type*
+  of `toWitnessSplit`. The guard-failure branch and the exceptional branch are
+  part of a signature, so dropping one is a type error rather than a proof
+  error.
+
+**Alternatives considered.** Collapsing `v` and `w` into one universe also
+silences the linter but is genuinely lossy — `GuardedMap`'s branch index is
+`Bool : Type 0` while its pass and fail nodes sit at an arbitrary level, so
+every guarded and escape split would have to be re-indexed by `ULift Bool`.
+Promoting only `Branch` to a parameter and leaving `child` a field is likewise
+clean and less invasive, but it gives up reason 1, which is the one that matters
+for an anti-reward-hacking system.
+
+`Split` is deliberately left alone: it is universe-clean as written, and §7.4
+already records the accepted mitigation for the same projection hazard on
+`Frontier.Task`.
+
+Two negative tests were rewritten rather than merely repaired. The old
+`partialClassifier` rejection would still have failed after this change, but for
+the wrong reason — a mistyped signature rather than a missing case — so it now
+states its incompleteness against the *same* child family as a positive
+control. A new `misroutedClassifier` rejection covers a gap the suite never had:
+that the `Sigma` really does tie each witness to the branch it names.
+
+**Result: CRRG core and test suite are warning-free under both v4.30.0 and
+v4.32.2.** `OPEN-01` is closed.
+
 #### `CHG-20` — fix: `OPEN-01` half one — every `Prop`-valued `def` becomes a `theorem`
 
 `OPEN-01` recorded that `linter.defProp` and `linter.checkUnivs` "ship with
@@ -914,7 +977,50 @@ class.
 Known work that is **not** done. Distinct from section 3, which records
 deviations that were decided deliberately and are closed.
 
-### `OPEN-01` — CRRG trips two Mathlib linters
+*(Nothing is currently open. `OPEN-01` is recorded below as closed, with its
+original diagnosis corrected, because the wrong diagnosis is the instructive
+part.)*
+
+### `OPEN-01` — CRRG trips two linters — **CLOSED by `CHG-20` / `CHG-21`**
+
+**The original entry's diagnosis was wrong.** It is retained verbatim below,
+because how it was wrong is worth keeping.
+
+It recorded both linters as shipping **with Mathlib**, and concluded that they
+"fire only once a downstream project pulls CRRG in alongside Mathlib, which
+means every downstream consumer sees them and CRRG never will". That asymmetry
+was the stated reason for recording the item here rather than fixing it.
+
+In fact both are **core Lean** linters, introduced between v4.30.0 and v4.32.2.
+Building CRRG under v4.32.2 with no Mathlib anywhere in scope reproduces every
+warning; building it under v4.30.0 reproduces none. Mathlib was never involved.
+The finding surfaced during a Mathlib-using downstream build only because that
+build is the one that happened to use the newer toolchain.
+
+Three things follow, and the first two were missed entirely:
+
+- **The `defProp` count was 11, not 7.** `CRRG/Audit.lean` contributes
+  `Frontier.rootIs`, `Frontier.leafIs`, `SealedCandidate.targetIs` and
+  `ResolvedCandidate.certifiedProof`.
+- **"Disable the linter" was never available.** `set_option linter.defProp
+  false` and `set_option linter.checkUnivs false` are hard `Unknown option`
+  errors under v4.30.0, so a library that must build under both toolchains
+  cannot suppress either.
+- **The real defect was in the gate, not the source.** CRRG's own check had only
+  ever built under the older of the two toolchains its integration target uses,
+  so an entire class of finding was invisible to it. `CHG-22` closes that gap;
+  without it, the next such divergence would again be found by a downstream
+  consumer rather than by CRRG.
+
+The `defProp` findings were mechanical (`CHG-20`). The `checkUnivs` finding was
+not: it was a genuine over-parameterisation that §6.6 item 4 already prescribed
+a fix for, and clearing it strengthened the type-linking of every witness split
+(`CHG-21` / `SPEC-10`).
+
+<details>
+<summary>Original entry, as written</summary>
+
+#### `OPEN-01` — CRRG trips two Mathlib linters
 
 Found during the Stage B Yukon integration (`proximity-research`, branch
 `crrg-stage-b-yukon`), *not* by CRRG's own gate — and it cannot be, because both
@@ -959,3 +1065,9 @@ adapters exist.
 **To reproduce:** build any project that requires both CRRG and Mathlib; the
 warnings appear when CRRG's modules are replayed. There is no way to see them
 from CRRG alone.
+
+</details>
+
+**Correct reproduction:** `elan toolchain install leanprover/lean4:v4.32.2`,
+point `lean-toolchain` at it, `lake build CRRG Test`. No Mathlib required.
+`scripts/crrg-portability` does this automatically (`CHG-22`).

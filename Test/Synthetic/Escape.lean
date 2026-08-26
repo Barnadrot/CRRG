@@ -20,9 +20,15 @@ private def escapeExample : EscapeMap parentNode mainNode escapeNode where
     else
       Sum.inr ⟨z, by omega⟩
 
--- Verify branch assignment
-example : (escapeExample.toWitnessSplit.child true) = mainNode := rfl
-example : (escapeExample.toWitnessSplit.child false) = escapeNode := rfl
+-- Verify branch assignment. The child family is an *index* of `WitnessSplit`,
+-- so it is fixed by the conversion's type rather than read out of a field.
+example : EscapeMap.child mainNode escapeNode true = mainNode := rfl
+example : EscapeMap.child mainNode escapeNode false = escapeNode := rfl
+
+-- The exceptional branch is visible in the conversion's *type*: deleting it
+-- would change a signature, not just a proof (§5.5).
+example : WitnessSplit parentNode (EscapeMap.child mainNode escapeNode) :=
+  escapeExample.toWitnessSplit
 
 -- Both main AND escape branches are required to close the parent.
 -- The escape branch cannot be silently dropped.

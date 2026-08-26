@@ -22,14 +22,22 @@ structure GuardedMap (parent : BadNode.{u}) (pass fail : BadNode.{v}) where
 
 namespace GuardedMap
 
+/-- The two-branch child family of a guarded split: `true` is the pass node,
+    `false` is the guard-failure node.
+
+    Named rather than inlined because `WitnessSplit` is indexed by its child
+    family, so this function appears in `toWitnessSplit`'s type. That is the
+    point: the guard-failure branch is visible in the signature and cannot be
+    dropped by an abstraction that no longer carries the checked data
+    (Spec §5.4). -/
+def child (pass fail : BadNode.{v}) : Bool → BadNode.{v}
+  | true => pass
+  | false => fail
+
 /-- Convert a `GuardedMap` to a `WitnessSplit` with two branches. -/
 def toWitnessSplit {parent : BadNode.{u}} {pass fail : BadNode.{v}}
     (g : GuardedMap parent pass fail) :
-    WitnessSplit parent where
-  Branch := Bool
-  child
-    | true => pass
-    | false => fail
+    WitnessSplit parent (GuardedMap.child pass fail) where
   classify w :=
     match h : g.guard w with
     | true => ⟨true, g.onPass w h⟩
