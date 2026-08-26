@@ -6,7 +6,7 @@ This file is the **plan of record** for spec conformance. Section 1 is the
 conformance matrix: every normative requirement in [`Spec.md`](Spec.md), its
 implementation status, and the change that last touched it. Section 2 is the
 chronological change log. Section 3 records deliberate deviations from the spec
-and the reason for each.
+and the reason for each. Section 4 records known work that is **not** done.
 
 Conventions:
 
@@ -843,3 +843,56 @@ always passed explicitly as a hypothesis — so nothing is lost by dropping the
 class.
 
 `Spec.md` amended accordingly (`SPEC-02`).
+
+---
+
+## 4. Open items
+
+Known work that is **not** done. Distinct from section 3, which records
+deviations that were decided deliberately and are closed.
+
+### `OPEN-01` — CRRG trips two Mathlib linters
+
+Found during the Stage B Yukon integration (`proximity-research`, branch
+`crrg-stage-b-yukon`), *not* by CRRG's own gate — and it cannot be, because both
+linters ship with Mathlib and CRRG's core is deliberately Mathlib-free. They fire
+only once a downstream project pulls CRRG in alongside Mathlib, which means
+**every downstream consumer sees them and CRRG never will**. That asymmetry is
+the reason this is recorded here rather than left to be rediscovered.
+
+**`linter.defProp`** — "Definition `X` is a proposition; use `theorem` instead of
+`def`". Fires on every `def` whose result type is the `Prop`-valued `Edge`:
+
+| Declaration | File |
+|-------------|------|
+| `CRRG.Edge.id` | `CRRG/Basic.lean` |
+| `CRRG.Edge.trans` | `CRRG/Basic.lean` |
+| `CRRG.Edge.comp` | `CRRG/Basic.lean` |
+| `CRRG.Split.toEdge` | `CRRG/Split.lean` |
+| `CRRG.WitnessMap.toEdge` | `CRRG/Witness.lean` |
+| `CRRG.MonotoneFamily.edge` | `CRRG/Monotone.lean` |
+| `CRRG.Progress.trans` | `CRRG/Monotone.lean` |
+
+This is a direct consequence of pinning `Edge : Prop` in `CHG-12`, and the fix is
+mechanical — `def` → `theorem` on each. Note the interaction before doing it:
+`Edge` is proof-irrelevant, so these carry no data and nothing can depend on
+their definitional unfolding. Worth confirming that claim against the test suite
+rather than assuming it.
+
+**`linter.checkUnivs`** — "`WitnessSplit`: universes `v`, `w` only occur together.
+This usually means there is a `max` expression in the type where none of these
+universes appear on their own." `CRRG/Witness.lean`. The universe polymorphism
+added in `CHG-12` gave `WitnessSplit` separate universes for its branch index and
+its child nodes, but they only ever appear together in a `max`, so one of them is
+redundant. Collapsing them is a signature change: check `WitnessSplit.toSplit`
+and the `GuardedMap`/`EscapeMap` conversions, which instantiate them at different
+levels.
+
+Neither is a soundness issue and neither blocks a downstream adapter — the Stage
+B reconstruction builds and its axiom audit is clean with both present. They are
+noise that every consumer inherits, so they are worth clearing before more
+adapters exist.
+
+**To reproduce:** build any project that requires both CRRG and Mathlib; the
+warnings appear when CRRG's modules are replayed. There is no way to see them
+from CRRG alone.
