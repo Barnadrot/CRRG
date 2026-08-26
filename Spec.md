@@ -97,9 +97,10 @@ crrg/
     Candidate.lean
     Audit.lean                 -- type-link helpers
 
+  CRRGTest/                    -- test support, shipped for downstream adapters
+    ExpectFailure.lean         -- #expect_failure negative-test harness
+
   Test/                        -- test library: may depend on Mathlib
-    Support/
-      ExpectFailure.lean       -- #expect_failure negative-test harness
     Synthetic/
       Edge.lean
       Witness.lean
@@ -152,6 +153,16 @@ additional dependencies, including Mathlib, because nothing downstream links
 against it; a test-only dependency does not constrain a consumer's version
 resolution. This split is what lets the synthetic fixtures use `ℚ` and other
 Mathlib structure while the shipped semantics stay dependency-free.
+
+`CRRGTest` is a **third** library, and the distinction is load-bearing. CRRG is
+an anti-reward-hacking system, so its most valuable tests are the ones asserting
+that a construction is *rejected* — and a downstream adapter needs exactly the
+same discipline for its own graph: that a weakened leaf, an incomplete split or
+a dropped guard branch fails to compile. The `#expect_failure` harness must
+therefore be reachable by a consumer, which it is not if it lives inside CRRG's
+own `Test` sources. `CRRGTest` ships it, is Lean-core-only like the core, and is
+**not** pulled in by `import CRRG`, so opting into the harness is explicit and
+the shipped semantics stay unencumbered.
 
 The generic core should be as dependency-light as practical. Prefer Lean core types and logic where sufficient. Avoid creating an unnecessary independent Mathlib-version constraint merely for basic CRRG semantics.
 

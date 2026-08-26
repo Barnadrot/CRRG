@@ -37,7 +37,7 @@ echo "  OK"
 echo ""
 
 echo "[3/7] Building test suite (primary toolchain)..."
-lake build Test
+lake build CRRGTest Test
 echo "  OK"
 echo ""
 

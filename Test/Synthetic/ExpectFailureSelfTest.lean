@@ -1,4 +1,4 @@
-import Test.Support.ExpectFailure
+import CRRGTest.ExpectFailure
 
 /-!
 # Self-test for the `#expect_failure` harness

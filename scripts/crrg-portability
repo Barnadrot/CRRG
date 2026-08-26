@@ -69,7 +69,7 @@ for tc in "${ordered[@]}"; do
   # start clean rather than trusting a stale trace. CRRG is ~43 modules; this
   # costs seconds.
   rm -rf "$CRRG_ROOT/.lake/build"
-  if ! out="$(elan run "$tc" lake build CRRG Test 2>&1)"; then
+  if ! out="$(elan run "$tc" lake build CRRG CRRGTest Test 2>&1)"; then
     echo "$out" | tail -40
     echo "  BUILD FAILED under $tc" >&2
     failed=1

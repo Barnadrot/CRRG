@@ -1,5 +1,5 @@
 import CRRG
-import Test.Support.ExpectFailure
+import CRRGTest.ExpectFailure
 
 /-!
 # Synthetic test: Frontier refinement and route retirement

@@ -189,6 +189,33 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-24` / `SPEC-13` — feat: ship `#expect_failure` to downstream adapters
+
+External Review 1, Priority 2 ("make failed tests real") and §2.3 ("the negative
+tests are not yet genuinely adversarial"). The harness itself was already real —
+`CHG-05` built it and `CHG-13` fixed a bug that made it silently pass on every
+`theorem` — but it lived in `Test/Support/`, inside CRRG's own test suite, where
+**no consumer could reach it**.
+
+That matters more for CRRG than for an ordinary library. CRRG is an
+anti-reward-hacking system: its most valuable tests are the ones asserting a
+construction is *rejected*, and a downstream `ResearchGraph` adapter needs
+exactly the same discipline for its own graph — that a weakened leaf, an
+incomplete split or a dropped guard branch fails to compile. Shipping the
+calculus without the means to test it adversarially ships half the design.
+
+`CRRGTest` is now a third Lake library, holding `CRRGTest/ExpectFailure.lean`.
+It is Lean-core-only like the core, and `import CRRG` does **not** pull it in, so
+opting into the harness is explicit and the shipped semantics stay
+unencumbered. CRRG's own test suite consumes it the same way a downstream
+adapter will, which keeps the shipped path on the tested path.
+
+`crrg-check`, `crrg-portability` and `crrg-status` build all three libraries.
+The portability sweep now also replays `ExpectFailureSelfTest` under every
+supported toolchain — worth noting because the `Elab.async := false` workaround
+in `CHG-13` guards a *toolchain behaviour*, not a fixed one, and had only ever
+been pinned against v4.30.0.
+
 #### `CHG-23` / `SPEC-12` — feat: generic replay patterns; no Yukon fixture inside CRRG
 
 `Spec.md` §2.2 reserved a `Test/YukonReplay/` directory inside CRRG for the

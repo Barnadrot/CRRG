@@ -38,12 +38,23 @@ for the spec-conformance matrix and the full audit trail.
 
 ```
 CRRG/
-  CRRG/            Core library modules
-  Test/Support/    Test harness (#expect_failure)
+  CRRG/            Core library modules — Lean core only
+  CRRGTest/        Test support shipped to consumers (#expect_failure)
   Test/Synthetic/  Unit tests for each primitive, incl. asserted rejections
   scripts/         Build, audit, and promotion scripts
   Spec.md          Full specification
   AGENTS.md        Agent interaction contract
+```
+
+`CRRGTest` is a separate library: `import CRRG` does not pull it in. A downstream
+adapter opts in to assert its *own* rejections — that a weakened leaf, an
+incomplete split, or a dropped guard branch fails to compile:
+
+```lean
+import CRRGTest.ExpectFailure
+
+#expect_failure
+theorem weakenedLeaf : Edge myParent myEasierChild := ...
 ```
 
 ## Building

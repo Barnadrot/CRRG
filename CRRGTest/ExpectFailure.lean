@@ -12,6 +12,11 @@ Spec acceptance criterion 8 requires that a deliberately weakened child
 statement or a missing branch is *rejected*, and that rejection must itself be
 checked by the build.
 
+It ships in the `CRRGTest` library rather than in CRRG's own test suite, because
+a downstream `ResearchGraph` adapter needs the same discipline for its own
+graph and cannot reach into a consumer's test sources. `import CRRG` does not
+pull this in; a consumer opts in with `import CRRGTest.ExpectFailure`.
+
 The environment and message log are restored afterwards, so a rejected command
 leaves no trace.
 
@@ -26,7 +31,9 @@ unaffected, which is what made the gap easy to miss.)
 
 `elabCommand` therefore runs with `Elab.async := false`, and
 `Test/Synthetic/ExpectFailureSelfTest.lean` pins the behaviour for all three
-declaration kinds so this cannot regress silently.
+declaration kinds so this cannot regress silently, and `scripts/crrg-portability`
+replays that self-test under every supported toolchain, since the asynchrony it
+works around is a toolchain behaviour rather than a fixed one.
 -/
 
 open Lean Elab Command
