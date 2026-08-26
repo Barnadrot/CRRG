@@ -1,51 +1,213 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Seal a candidate target, or verify a seal that was taken earlier.
+#
+# Usage:
+#   crrg-seal <declaration>                    print the exact type and its hash
+#   crrg-seal --verify <declaration> <sha256>  check the type still hashes to it
+#   crrg-seal --verify-registry [<file>]       check every seal in a registry
+#
+# Environment:
+#   CRRG_IMPORTS    comma-separated modules to import (default: CRRG)
+#   CRRG_WORKDIR    Lake project root to run in (default: the CRRG repo root)
+#   CRRG_SEALS      registry path (default: $CRRG_WORKDIR/crrg-seals.tsv)
+#   CRRG_SEAL_SCOPE namespace whose definitions the seal covers
+#                   (default: the target's own root namespace)
+#
+# What a seal hash is for
+# -----------------------
+# `SealedCandidate P` makes the target a type parameter, so a sealed proposition
+# cannot be weakened *in place* (§8.5). That is the kernel half of the
+# guarantee, and it is airtight against one attack: you cannot hand a
+# `SealedCandidate Q` where a `SealedCandidate P` is required.
+#
+# It is silent about the complementary attack. `E17Target` is a *name*; nothing
+# stops an agent redefining the declaration that name refers to and then proving
+# the easier statement it now denotes. Every type in sight still checks, because
+# from the kernel's point of view nothing was weakened -- `P` simply always
+# meant the easier thing. §8.4 names this and assigns it to the tooling.
+#
+# So the hash is taken outside Lean at seal time, and `--verify` recomputes it. A
+# candidate whose target has been edited under it stops verifying, which is the
+# detection External Review 1 §2.1 asked for.
+#
+# What exactly gets hashed
+# ------------------------
+# Not the declaration's *type*. A candidate target is normally written
+#
+#     def E17Target : Prop := A -> B -> C
+#
+# whose type is just `Prop` -- identical for every target ever written. Hashing
+# that would produce a seal that cannot tell any two candidates apart, let alone
+# a candidate from a weakened version of itself.
+#
+# The seal covers the declaration's type *and* its body, and then the same for
+# every constant it transitively depends on **within its own namespace**. The
+# closure matters: `E17Target` means nothing without `A`, `B` and `C`, and
+# editing one of those retargets the candidate exactly as effectively as editing
+# the target. Theorem bodies are excluded -- a theorem's type is its meaning and
+# its proof is interchangeable, so hashing proofs would break every seal on
+# every refactor. Mathlib and Lean core are outside the scope; they are pinned
+# by the Lake manifest, not by a seal.
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CRRG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-if [ $# -lt 1 ]; then
-  echo "Usage: crrg-seal <candidate-declaration-name>"
-  echo "Example: crrg-seal MyProject.Candidates.E17Target"
-  echo ""
-  echo "Environment:"
-  echo "  CRRG_IMPORTS   comma-separated modules to import (default: CRRG)"
-  echo "  CRRG_WORKDIR   Lake project root to run in (default: the CRRG repo root)"
+usage() {
+  sed -n '3,18p' "$0" | sed 's/^# \{0,1\}//'
   exit 1
-fi
+}
 
-DECL="$1"
+MODE=print
+DECL=""
+EXPECTED=""
+REGISTRY=""
+
+case "${1:-}" in
+  --verify)
+    MODE=verify
+    DECL="${2:-}"; EXPECTED="${3:-}"
+    [ -n "$DECL" ] && [ -n "$EXPECTED" ] || usage ;;
+  --verify-registry)
+    MODE=registry
+    REGISTRY="${2:-}" ;;
+  -h|--help|"") usage ;;
+  -*) echo "crrg-seal: unknown option $1" >&2; usage ;;
+  *) DECL="$1" ;;
+esac
+
 IMPORTS="${CRRG_IMPORTS:-CRRG}"
 WORKDIR="${CRRG_WORKDIR:-$CRRG_ROOT}"
+REGISTRY="${REGISTRY:-${CRRG_SEALS:-$WORKDIR/crrg-seals.tsv}}"
 
 cd "$WORKDIR"
 
-echo "=== Seal check for: $DECL ==="
-echo ""
-echo "Verifying declaration exists and printing its exact type..."
+# Elaborate the seal body against `$IMPORTS` and set, in the *current* shell:
+#   SEAL_HASH  SEAL_KIND  SEAL_ISPROP  SEAL_READABLE
+# Deliberately not a subshell: process substitution would discard the readable
+# type, and silently reporting a hash with no type to eyeball is not a seal.
+seal_of() {
+  local decl="$1"
+  local tmp out m
+  tmp="${WORKDIR}/.crrg_seal_tmp_$$.lean"
+  echo "import Lean" > "$tmp"
+  IFS=',' read -ra _mods <<< "$IMPORTS"
+  for m in "${_mods[@]}"; do
+    m="$(echo "$m" | tr -d '[:space:]')"
+    [ -n "$m" ] && echo "import $m" >> "$tmp"
+  done
+  cat "$SCRIPT_DIR/seal_body.lean.in" >> "$tmp"
 
-TMPFILE="${WORKDIR}/.crrg_seal_tmp_$$.lean"
-trap 'rm -f "$TMPFILE"' EXIT
-: > "$TMPFILE"
-IFS=',' read -ra _mods <<< "$IMPORTS"
-for m in "${_mods[@]}"; do
-  m="$(echo "$m" | tr -d '[:space:]')"
-  [ -n "$m" ] && echo "import $m" >> "$TMPFILE"
-done
-{
-  echo "#check @$DECL"
-  echo "#print axioms $DECL"
-} >> "$TMPFILE"
-SEAL_OUT="$(lake env lean "$TMPFILE")"
-echo "$SEAL_OUT"
+  if ! out="$(CRRG_SEAL_DECL="$decl" lake env lean "$tmp" 2>&1)"; then
+    rm -f "$tmp"
+    echo "$out" >&2
+    return 1
+  fi
+  rm -f "$tmp"
 
-echo ""
-echo "Seal hash (sha256 of the printed type, for the candidate record):"
-echo "$SEAL_OUT" | grep -v '^.*depends on axioms' | sha256sum | cut -d' ' -f1
+  SEAL_KIND="$(sed -n 's/^CRRG_SEAL_KIND //p' <<< "$out")"
+  SEAL_ISPROP="$(sed -n 's/^CRRG_SEAL_DENOTES_PROP //p' <<< "$out")"
+  SEAL_SCOPE="$(sed -n 's/^CRRG_SEAL_SCOPE //p' <<< "$out")"
+  SEAL_DEPS="$(sed -n 's/^CRRG_SEAL_DEPS //p' <<< "$out")"
+  SEAL_READABLE="$(sed -n '/^CRRG_SEAL_READABLE_BEGIN$/,/^CRRG_SEAL_READABLE_END$/p' <<< "$out" \
+    | sed '1d;$d')"
 
-echo ""
-echo "=== End seal check ==="
-echo ""
-echo "If the type above is the exact proposition you intend to seal,"
-echo "record it, together with the seal hash, as a SealedCandidate in the"
-echo "downstream graph adapter. A sealed target may never be weakened in place."
+  # Everything strictly between the canonical markers, and nothing else.
+  local canonical
+  canonical="$(sed -n '/^CRRG_SEAL_CANONICAL_BEGIN$/,/^CRRG_SEAL_CANONICAL_END$/p' <<< "$out" \
+    | sed '1d;$d')"
+  if [ -z "$canonical" ]; then
+    echo "crrg-seal: no canonical type emitted for $decl" >&2
+    return 1
+  fi
+  SEAL_HASH="$(printf '%s' "$canonical" | sha256sum | cut -d' ' -f1)"
+}
+
+case "$MODE" in
+
+print)
+  echo "=== Seal check for: $DECL ==="
+  echo ""
+  seal_of "$DECL"
+  echo "Declaration kind:  $SEAL_KIND"
+  echo "Denotes a Prop:    $SEAL_ISPROP"
+  echo "Seal scope:        $SEAL_SCOPE ($SEAL_DEPS in-scope dependencies also sealed)"
+  echo ""
+  echo "Exact type:"
+  echo "$SEAL_READABLE" | sed 's/^/  /'
+  echo ""
+  echo "Seal hash (sha256 of the canonical target and its in-scope dependencies):"
+  echo "  $SEAL_HASH"
+  echo ""
+  if [ "$SEAL_ISPROP" != "true" ]; then
+    echo "NOTE: this declaration's type is not a Prop. A candidate target should"
+    echo "be a proposition; sealing anything else is very likely a mistake."
+    echo ""
+  fi
+  if [ "$SEAL_KIND" = "theorem" ]; then
+    echo "NOTE: this is a theorem, not a target definition. Seals anchor the"
+    echo "*proposition* a candidate must inhabit, not the proof that inhabits it."
+    echo ""
+  fi
+  echo "Registry line (append to $(basename "$REGISTRY")):"
+  printf '  <id>\t%s\t%s\t%s\t<iso8601>\t<expectedTheoremName>\t<targetId>\t<sourceIds>\n' \
+    "$DECL" "$SEAL_HASH" "$(git -C "$WORKDIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  echo ""
+  echo "A sealed target may never be weakened in place. If the proposition must"
+  echo "change, create a new candidate id and retain the old one (§8.5)."
+  ;;
+
+verify)
+  seal_of "$DECL"
+  if [ "$SEAL_HASH" = "$EXPECTED" ]; then
+    echo "SEAL OK    $DECL  $SEAL_HASH"
+  else
+    echo "SEAL BROKEN  $DECL" >&2
+    echo "  expected  $EXPECTED" >&2
+    echo "  actual    $SEAL_HASH" >&2
+    echo "" >&2
+    echo "  The declaration this candidate is sealed against has changed since" >&2
+    echo "  the seal was taken. The kernel cannot see this: the sealed type" >&2
+    echo "  parameter still matches, because the name still resolves -- to a" >&2
+    echo "  different proposition. Do not re-baseline the hash. Open a new" >&2
+    echo "  candidate id and mark the old one superseded (§8.5)." >&2
+    exit 1
+  fi
+  ;;
+
+registry)
+  if [ ! -f "$REGISTRY" ]; then
+    echo "crrg-seal: no registry at $REGISTRY" >&2
+    exit 1
+  fi
+  echo "=== Seal registry verification ==="
+  echo "Registry: $REGISTRY"
+  echo ""
+  broken=0
+  checked=0
+  while IFS=$'\t' read -r id decl hash commit created expected_thm target_id source_ids || [ -n "$id" ]; do
+    case "$id" in ''|'#'*) continue ;; esac
+    checked=$((checked + 1))
+    if ! seal_of "$decl"; then
+      echo "  ERROR   $id  $decl (could not be sealed; see above)"
+      broken=$((broken + 1)); continue
+    fi
+    if [ "$SEAL_HASH" = "$hash" ]; then
+      echo "  OK      $id  $decl"
+    else
+      echo "  BROKEN  $id  $decl"
+      echo "            sealed at $commit on $created"
+      echo "            expected  $hash"
+      echo "            actual    $SEAL_HASH"
+      broken=$((broken + 1))
+    fi
+  done < "$REGISTRY"
+  echo ""
+  if [ "$broken" -ne 0 ]; then
+    echo "=== Seal registry verification FAILED ($broken of $checked) ==="
+    exit 1
+  fi
+  echo "=== Seal registry verification PASSED ($checked seals) ==="
+  ;;
+esac

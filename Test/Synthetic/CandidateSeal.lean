@@ -157,3 +157,45 @@ example : queue.target QTask.e001 = (∀ n : Nat, n + 0 = n) := rfl
 and the two are unrelated types. -/
 #expect_failure
 private def queueClosesRoot : Frontier ⟨∀ n : Nat, n + 0 = n⟩ := queue
+
+/-! ## Fixtures for the seal-hash tooling
+
+Everything above is about what the *kernel* enforces: a `SealedCandidate P`
+cannot become a `SealedCandidate Q`, so a target cannot be weakened in place.
+
+That guarantee has a blind spot, and §8.4 assigns it to the tooling.
+`E17Target` is a **name**. Nothing above stops an agent editing the declaration
+that name refers to and then proving the easier statement it now denotes — every
+type still checks, because from the kernel's point of view `P` simply always
+meant the easier thing. `scripts/crrg-seal` closes that by hashing the target's
+printed type at seal time and re-checking it later.
+
+These two declarations are that tool's fixtures, exercised by
+`scripts/crrg-selftest`. They are deliberately a proposition and a genuine
+weakening of it: if the seal hash ever failed to tell them apart, a live
+candidate could be silently retargeted at the weaker one. They are public
+because the tooling refers to them by name. -/
+
+namespace SealFixture
+
+def Strong : Prop := ∀ n : Nat, n + 0 = n
+
+def Weakened : Prop := (0 : Nat) + 0 = 0
+
+-- The weakening is real: the strong statement implies the weak one, and the
+-- reverse implication is not available. Stated so the fixtures cannot silently
+-- drift into being unrelated, which would make the hash test vacuous.
+theorem weakens (h : Strong) : Weakened := h 0
+
+/-! A target is rarely self-contained. `Composed` names `Helper`, so editing
+`Helper` retargets `Composed` without touching `Composed` at all — the same
+attack one indirection out. The seal therefore covers the target's transitive
+dependencies within its own namespace, and `scripts/crrg-selftest` checks that
+by sealing `Composed` twice with different scopes and requiring the hashes to
+differ. -/
+
+def Helper : Prop := 2 + 2 = 4
+
+def Composed : Prop := Helper → Strong
+
+end SealFixture

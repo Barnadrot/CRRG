@@ -189,6 +189,73 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-26` / `SPEC-15` — fix: **the seal hash was a function of the target's name, not its proposition**
+
+External Review 1 §2.1 recorded sealing as "not yet a durable seal" — a
+prototype missing a persistent hash, a registry, and change detection. It is
+worse than that. The mechanism that existed could not have worked.
+
+**The finding.** `crrg-seal` hashed the output of `#check @<decl>` plus
+`#print axioms`. §8.1's normative shape for a candidate target is
+
+```lean
+def E3Target : Prop := H2CompletionResult → LandedH2Count → FpMomentBudget
+```
+
+whose **type is `Prop`**. So `#check` printed `E3Target : Prop`, and the hashed
+text was
+
+```text
+E3Target : Prop
+'E3Target' does not depend on any axioms
+```
+
+— a function of the declaration's *name* and nothing else. Verified directly
+against three fixtures that differ only in their propositions: three distinct
+hashes, each determined entirely by the name.
+
+The consequence is exact and is the opposite of what §8.4 promises. Renaming a
+target changed the hash, which is not an attack anyone was worried about.
+Editing `E3Target`'s body into an easier statement while keeping the name left
+the hash **identical** — which is precisely the attack §8.4 assigns to the
+tooling, on the grounds that "the kernel cannot see that, but the hash printed
+by `scripts/crrg-seal` does". It did not.
+
+Found by writing the first test that required two different targets to hash
+differently. Nothing before that had ever compared two seals.
+
+**What is hashed now.** The target's type *and its body*, plus the same for
+every constant it transitively depends on **within its own namespace**.
+
+The closure is not optional. `E3Target` means nothing without the three
+definitions it names, so editing one of *those* retargets the candidate exactly
+as effectively as editing the target — the same attack one indirection out. The
+scope boundary is the project's own namespace: Mathlib and Lean core are pinned
+by the Lake manifest rather than by a seal, and hashing them would tie every
+seal to a multi-gigabyte closure.
+
+Two deliberate exclusions:
+
+- **Theorem bodies.** A theorem's type is its meaning and its proof is
+  interchangeable under proof irrelevance. Hashing proofs would break every seal
+  on every refactor, and a seal that cries wolf gets re-baselined — at which
+  point it anchors nothing.
+- **Pretty-printer variation.** Rendering uses `pp.all`, a fixed arrow glyph and
+  an enormous `format.width`, so notation arriving from an unrelated import,
+  elided instances, and line wrapping cannot move a hash. A false alarm is the
+  safe direction; a false pass is the one this must not have.
+
+**New capability.** `crrg-seal --verify <decl> <sha256>` recomputes and compares;
+`--verify-registry [file]` checks every entry of a TSV whose columns are exactly
+`SealRecord`'s fields, so the on-disk registry and the Lean-side record are the
+same data. A broken seal explains why re-baselining is the wrong response and
+points at §8.5.
+
+Nine self-tests cover it, including the two that matter: a weakened target must
+hash differently, and sealing with a scope that excludes a dependency must give
+a different hash from sealing with one that includes it — which is how the
+closure property is checked without editing a file mid-test.
+
 #### `CHG-25` / `SPEC-14` — feat: `crrg-forbid`, and self-tests for the gate's own tools
 
 **`crrg-forbid` — "prove this without using that."** Spec §11 item 4 requires an

@@ -103,7 +103,8 @@ CRRG never imports project-specific mathematics. The downstream project owns its
   and a case it must reject
 - `scripts/crrg-status` — human-readable state summary
 - `scripts/crrg-lineage` — print axiom dependencies of a declaration
-- `scripts/crrg-seal` — print a candidate's exact type and seal hash before sealing
+- `scripts/crrg-seal` — seal a candidate target, and re-verify a seal later
+  (`--verify`, `--verify-registry`)
 - `scripts/crrg-promote-check` — verify a theorem inhabits a sealed target *and*
   depends on no banned axiom
 
@@ -119,6 +120,8 @@ CRRG_WORKDIR=/path/to/proximity-research CRRG_IMPORTS=ProximityPrize.Squeeze.Sou
 - Every edge is a Lean theorem (no prose-only arrows)
 - No certified edge or promoted candidate may depend on `sorry`
 - A sealed candidate target cannot be weakened in place — it is a type parameter
+- A sealed target that is redefined under its own name is detected: the seal
+  hash covers the target's body and its in-project dependency closure
 - A refutation must carry a disproof; a resolved candidate cannot be promoted
 - Numerical reward only for a strictly stronger parameter in the *same* family
 - The gate emits one line per task and no aggregate — `render_length` is a theorem

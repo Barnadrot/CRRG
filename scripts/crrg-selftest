@@ -56,7 +56,7 @@ echo ""
 # every one of them die on an incompatible header, which would otherwise look
 # like a rejection. Rebuild under the primary toolchain first so a failure below
 # is about the tool and not about the tree.
-lake build CRRG CRRGTest >/dev/null 2>&1 || {
+lake build CRRG CRRGTest Test >/dev/null 2>&1 || {
   echo "  cannot build CRRG under the primary toolchain; self-tests cannot run" >&2
   exit 1
 }
@@ -131,6 +131,76 @@ LEAN
 expect reject "aggregate progress magnitude" \
   "rejects an aggregate progress magnitude (§5.6)" \
   "$SCRIPT_DIR/crrg-banned" "$TMPDIR_SELFTEST/Aggregate.lean"
+
+echo ""
+echo "crrg-seal:"
+
+SEAL_IMPORTS="CRRG,Test.Synthetic.CandidateSeal"
+seal_hash() {
+  CRRG_IMPORTS="$1" "$SCRIPT_DIR/crrg-seal" "$2" 2>/dev/null \
+    | sed -n '/^Seal hash/,+1p' | tail -1 | tr -d '[:space:]'
+}
+
+H_STRONG="$(seal_hash "$SEAL_IMPORTS" SealFixture.Strong)"
+H_STRONG_AGAIN="$(seal_hash "$SEAL_IMPORTS" SealFixture.Strong)"
+H_WEAK="$(seal_hash "$SEAL_IMPORTS" SealFixture.Weakened)"
+# A much larger import set. `pp.all` exists so that notation and instances
+# arriving from unrelated modules cannot move the hash; if that ever regresses,
+# a seal would break for reasons having nothing to do with its target.
+H_STRONG_WIDE="$(seal_hash "CRRG,Test" SealFixture.Strong)"
+
+check() {
+  if [ "$1" = true ]; then echo "  PASS  $2"; pass=$((pass + 1));
+  else echo "  FAIL  $2"; fail=$((fail + 1)); fi
+}
+
+[ -n "$H_STRONG" ] && check true "produces a hash for a Prop-valued target" \
+  || check false "produces a hash for a Prop-valued target"
+[ "$H_STRONG" = "$H_STRONG_AGAIN" ] && check true "hashing is deterministic" \
+  || check false "hashing is deterministic"
+[ "$H_STRONG" = "$H_STRONG_WIDE" ] && check true "hash is stable under a wider import set" \
+  || check false "hash is stable under a wider import set (got $H_STRONG vs $H_STRONG_WIDE)"
+[ "$H_STRONG" != "$H_WEAK" ] && check true "a weakened target hashes differently" \
+  || check false "a weakened target hashes differently"
+
+# A target that names a helper: the helper must be inside the hash, or editing
+# it would retarget the candidate invisibly. Sealing the same declaration with a
+# scope that excludes the helper must therefore give a different hash.
+H_COMPOSED="$(seal_hash "$SEAL_IMPORTS" SealFixture.Composed)"
+H_COMPOSED_NARROW="$(CRRG_SEAL_SCOPE=NoSuchNamespace seal_hash "$SEAL_IMPORTS" SealFixture.Composed)"
+[ -n "$H_COMPOSED" ] && [ "$H_COMPOSED" != "$H_COMPOSED_NARROW" ] \
+  && check true "the seal covers the target's in-scope dependencies" \
+  || check false "the seal covers the target's in-scope dependencies"
+
+expect ok "SEAL OK" \
+  "--verify accepts the recorded hash" \
+  env CRRG_IMPORTS="$SEAL_IMPORTS" "$SCRIPT_DIR/crrg-seal" --verify \
+     SealFixture.Strong "$H_STRONG"
+
+# The attack §8.4 assigns to the tooling: the candidate id and the sealed type
+# parameter are both unchanged, and only the declaration underneath moved.
+expect reject "SEAL BROKEN" \
+  "--verify rejects a target that has been retargeted at a weaker proposition" \
+  env CRRG_IMPORTS="$SEAL_IMPORTS" "$SCRIPT_DIR/crrg-seal" --verify \
+     SealFixture.Weakened "$H_STRONG"
+
+expect reject "no such declaration" \
+  "rejects sealing a declaration that does not exist" \
+  env CRRG_IMPORTS="$SEAL_IMPORTS" "$SCRIPT_DIR/crrg-seal" SealFixture.NoSuchTarget
+
+printf '%s\t%s\t%s\tHEAD\t2026-01-01T00:00:00Z\tthm\tN1\tN0\n' \
+  "S001" "SealFixture.Strong" "$H_STRONG" > "$TMPDIR_SELFTEST/good.tsv"
+expect ok "registry verification PASSED" \
+  "verifies a registry whose seals still hold" \
+  env CRRG_IMPORTS="$SEAL_IMPORTS" "$SCRIPT_DIR/crrg-seal" \
+     --verify-registry "$TMPDIR_SELFTEST/good.tsv"
+
+printf '%s\t%s\t%s\tHEAD\t2026-01-01T00:00:00Z\tthm\tN1\tN0\n' \
+  "S002" "SealFixture.Weakened" "$H_STRONG" > "$TMPDIR_SELFTEST/bad.tsv"
+expect reject "registry verification FAILED" \
+  "fails a registry whose seal no longer matches" \
+  env CRRG_IMPORTS="$SEAL_IMPORTS" "$SCRIPT_DIR/crrg-seal" \
+     --verify-registry "$TMPDIR_SELFTEST/bad.tsv"
 
 echo ""
 if [ "$fail" -ne 0 ]; then

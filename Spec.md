@@ -122,6 +122,7 @@ crrg/
     crrg-portability           -- clean build under every supported toolchain
     portability-toolchains.txt -- the supported toolchain list
     crrg-selftest              -- the gate's checks must fail when they should
+    seal_body.lean.in          -- elaborator body used by crrg-seal
     crrg-status
     crrg-lineage
     crrg-seal
@@ -1001,6 +1002,36 @@ This is enforced by the type, not by review: the proposition is a parameter of
 than a mutation. The `sealHash` in the seal record covers the complementary
 attack of redefining the underlying Lean declaration while keeping its name — the
 kernel cannot see that, but the hash printed by `scripts/crrg-seal` does.
+
+**What the seal hash must cover (normative).** A candidate target's normative
+shape is `def E3Target : Prop := ...`, whose *type* is `Prop`. A hash taken over
+the target's type is therefore a function of nothing at all — every candidate
+ever written has the same one. The hash must be taken over the declaration's
+**body**, and over the bodies and types of every constant it transitively
+depends on **within the project's own namespace**.
+
+The closure is required, not a refinement. `E3Target` means nothing without the
+definitions it names, so editing one of those retargets the candidate exactly as
+effectively as editing the target — the same substitution, one indirection out.
+
+Two exclusions are equally normative, because a seal that produces false alarms
+gets re-baselined, and a re-baselined seal anchors nothing:
+
+- **Theorem bodies are not hashed.** A theorem's type is its meaning; its proof
+  is interchangeable under proof irrelevance. Hashing proofs would break every
+  seal on every refactor.
+- **Dependencies outside the project namespace are not hashed.** Mathlib and
+  Lean core are pinned by the Lake manifest, which is the right instrument for
+  them; hashing them would tie every seal to a multi-gigabyte closure.
+
+Rendering for the hash must be insensitive to notation, implicit-argument
+elision and line width, so that an unrelated import cannot move a seal.
+
+Verification is part of the gate, not an operator's discretion:
+`scripts/crrg-seal --verify` recomputes one seal and
+`--verify-registry` recomputes all of them. A downstream graph gate runs the
+latter. **A broken seal is never repaired by re-recording the hash**; it means
+the target moved, and §8.5 requires a new candidate id with the old one retained.
 
 ### 8.5 Anti-proxy rule for candidate promotion
 
