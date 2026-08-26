@@ -79,7 +79,7 @@ def goalAt (p : Param) : Goal := ⟨F.claim p⟩
     This is the family's monotonicity theorem viewed as a CRRG edge, with the
     usual rootward direction: solve the child (the stronger parameter) and the
     parent (the weaker one) is solved. -/
-def edge {a b : Param} (h : F.Stronger a b) : Edge (F.goalAt b) (F.goalAt a) :=
+theorem edge {a b : Param} (h : F.Stronger a b) : Edge (F.goalAt b) (F.goalAt a) :=
   ⟨F.monotone h⟩
 
 variable {F}
@@ -134,7 +134,7 @@ theorem closes_old_goal (p : Progress F old new) : (F.goalAt old).Proved :=
   p.implies_old
 
 /-- Consecutive improvements compose into a single certified improvement. -/
-def trans {mid : Param} (p : Progress F old mid) (q : Progress F mid new) :
+theorem trans {mid : Param} (p : Progress F old mid) (q : Progress F mid new) :
     Progress F old new :=
   { improvement := MonotoneFamily.strictlyStronger_trans q.improvement p.improvement
     proof := q.proof }

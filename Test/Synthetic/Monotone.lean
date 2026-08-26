@@ -92,7 +92,7 @@ private abbrev momentBound : MonotoneFamily Nat where
   claim k := ∀ n : Nat, n ≤ k → n ≤ k
   stronger_refl _ := Nat.le_refl _
   stronger_trans hab hbc := Nat.le_trans hbc hab
-  monotone _ _ n hn := hn
+  monotone _ _ _ hn := hn
 
 private def momentProgress : Progress momentBound 3 5 where
   improvement := ⟨by omega, by omega⟩

@@ -35,7 +35,7 @@ def trivial (G : Goal) : Split.{0} G where
 
 /-- Convert a split into an edge from a conjunction goal.
     The conjunction goal requires all branches simultaneously. -/
-def toEdge {parent : Goal} (s : Split parent) : Edge parent ⟨∀ i, (s.child i).claim⟩ :=
+theorem toEdge {parent : Goal} (s : Split parent) : Edge parent ⟨∀ i, (s.child i).claim⟩ :=
   ⟨s.discharge⟩
 
 end Split

@@ -188,6 +188,40 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-20` — fix: `OPEN-01` half one — every `Prop`-valued `def` becomes a `theorem`
+
+`OPEN-01` recorded that `linter.defProp` and `linter.checkUnivs` "ship with
+Mathlib", so that "every downstream consumer sees them and CRRG never will".
+
+**That diagnosis is wrong, and it mattered.** Both are **core Lean** linters,
+introduced between v4.30.0 and v4.32.2. CRRG pins v4.30.0; the Yukon lane pins
+v4.32.2. Building CRRG under v4.32.2 with no Mathlib anywhere in scope produces
+every one of the warnings, and building it under v4.30.0 produces none. The gap
+was never Mathlib — it was that CRRG's gate has only ever built under the older
+of the two toolchains its own integration target uses. `CHG-21` closes that.
+
+Two further consequences the original entry missed:
+
+- **The count was 11, not 7.** `CRRG/Audit.lean` contributes four more:
+  `Frontier.rootIs`, `Frontier.leafIs`, `SealedCandidate.targetIs` and
+  `ResolvedCandidate.certifiedProof`. They return `True` or a bare `P`, so they
+  are propositions just as much as the `Edge`-valued ones are.
+- **Suppression is not portable.** `set_option linter.defProp false` and
+  `set_option linter.checkUnivs false` are *hard errors* under v4.30.0
+  (`Unknown option`), so "disable the linter" is not available to a library that
+  must build under both.
+
+All eleven are now `theorem`. The interaction `OPEN-01` flagged as worth
+confirming — whether anything depends on their definitional unfolding — cannot
+arise: every one of them is a proposition, so proof irrelevance already makes
+any two inhabitants definitionally equal. The full suite builds unchanged, 30
+jobs, including the `rfl`-shaped agreement checks in the downstream Stage B
+reconstruction.
+
+Also fixes the two `unusedVariables` warnings (`CRRG/Debt.lean` `chain_intro`,
+`Test/Synthetic/Monotone.lean` `momentBound.monotone`), which are core-linter
+findings present under both toolchains.
+
 #### `CHG-19` — fix: the gate could not run from a fresh clone, on Linux
 
 Three portability defects, all introduced by the Windows workstation used as an

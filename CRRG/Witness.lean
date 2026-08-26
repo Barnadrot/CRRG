@@ -44,7 +44,7 @@ theorem closed_parent {parent : BadNode.{u}} {child : BadNode.{v}}
   fun w => hChild (r.map w)
 
 /-- Convert a `WitnessMap` into a proposition-level `Edge`. -/
-def toEdge {parent : BadNode.{u}} {child : BadNode.{v}}
+theorem toEdge {parent : BadNode.{u}} {child : BadNode.{v}}
     (r : WitnessMap parent child) :
     Edge ⟨parent.Closed⟩ ⟨child.Closed⟩ :=
   ⟨r.closed_parent⟩

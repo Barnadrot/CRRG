@@ -30,15 +30,15 @@ structure Edge (parent child : Goal) : Prop where
 namespace Edge
 
 /-- Identity edge: a goal discharges itself. -/
-def id (G : Goal) : Edge G G := ⟨_root_.id⟩
+theorem id (G : Goal) : Edge G G := ⟨_root_.id⟩
 
 /-- Transitivity: compose edges rootward.
     If `C` discharges `B` and `B` discharges `A`, then `C` discharges `A`. -/
-def trans {A B C : Goal} (ab : Edge A B) (bc : Edge B C) : Edge A C :=
+theorem trans {A B C : Goal} (ab : Edge A B) (bc : Edge B C) : Edge A C :=
   ⟨fun hC => ab.discharge (bc.discharge hC)⟩
 
 /-- Compose two edges in leaf-to-root order. -/
-def comp {A B C : Goal} (bc : Edge B C) (ab : Edge A B) : Edge A C :=
+theorem comp {A B C : Goal} (bc : Edge B C) (ab : Edge A B) : Edge A C :=
   ab.trans bc
 
 end Edge

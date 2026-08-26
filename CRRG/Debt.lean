@@ -49,7 +49,7 @@ theorem chain_apply : ∀ (ps : List Prop) (c : Prop), chain ps c → (∀ p ∈
 /-- Conversely, anything that follows from all the premises is a `chain`. -/
 theorem chain_intro : ∀ (ps : List Prop) (c : Prop), ((∀ p ∈ ps, p) → c) → chain ps c
   | [], _, h => h (fun _ hp => absurd hp (List.not_mem_nil))
-  | p :: ps, c, h =>
+  | _ :: ps, c, h =>
       fun hp => chain_intro ps c (fun hrest =>
         h (fun q hq =>
           match List.mem_cons.mp hq with
