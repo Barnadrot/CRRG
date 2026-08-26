@@ -10,17 +10,38 @@ echo ""
 
 cd "$CRRG_ROOT"
 
-echo "[1/5] Building CRRG library..."
+echo "[1/6] Script hygiene (executable bit recorded in the git index)..."
+# The gate invokes crrg-audit and crrg-banned directly, so a script that is
+# executable in the working tree but recorded as 100644 in the index breaks the
+# gate on every fresh clone -- while still passing here. That is exactly what
+# happened: both were committed without the bit from a machine whose git does
+# not track file mode. Check the *index*, not the filesystem.
+if git -C "$CRRG_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  nonexec="$(git -C "$CRRG_ROOT" ls-files -s scripts/ \
+    | awk '$1 != "100755" && $4 ~ /scripts\/crrg-/ { print "    " $4 " is " $1 }')"
+  if [ -n "$nonexec" ]; then
+    echo "  FAILED - these gate scripts are not executable in the git index:" >&2
+    echo "$nonexec" >&2
+    echo "  Fix with: git update-index --chmod=+x <path>" >&2
+    exit 1
+  fi
+  echo "  All crrg-* scripts are 100755 in the index."
+else
+  echo "  (not a git checkout; skipped)"
+fi
+echo ""
+
+echo "[2/6] Building CRRG library..."
 lake build CRRG
 echo "  OK"
 echo ""
 
-echo "[2/5] Building test suite..."
+echo "[3/6] Building test suite..."
 lake build Test
 echo "  OK"
 echo ""
 
-echo "[3/5] Declaration audit (verifying core types exist)..."
+echo "[4/6] Declaration audit (verifying core types exist)..."
 TMPFILE="${CRRG_ROOT}/.crrg_check_tmp_$$.lean"
 trap 'rm -f "$TMPFILE"' EXIT
 cat > "$TMPFILE" <<'LEAN'
@@ -50,11 +71,11 @@ lake env lean "$TMPFILE"
 echo "  All core declarations present."
 echo ""
 
-echo "[4/5] Transitive axiom audit (Spec 14.2 item 3)..."
+echo "[5/6] Transitive axiom audit (Spec 14.2 item 3)..."
 "$SCRIPT_DIR/crrg-audit"
 echo ""
 
-echo "[5/5] Banned-construct scan (Spec 14.2 item 2, 5.6, 14.2 item 7)..."
+echo "[6/6] Banned-construct scan (Spec 14.2 item 2, 5.6, 14.2 item 7)..."
 "$SCRIPT_DIR/crrg-banned"
 echo ""
 

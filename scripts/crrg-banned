@@ -13,4 +13,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CRRG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "${CRRG_WORKDIR:-$CRRG_ROOT}"
 
-exec python "$SCRIPT_DIR/banned_scan.py" "$@"
+# `python` is not on PATH on a stock Linux install; `python3` is. Prefer
+# whichever exists rather than assuming the Windows/conda layout.
+PY="${PYTHON:-}"
+if [ -z "$PY" ]; then
+  if command -v python3 >/dev/null 2>&1; then PY=python3
+  elif command -v python >/dev/null 2>&1; then PY=python
+  else echo "crrg-banned: no python3 or python on PATH" >&2; exit 1
+  fi
+fi
+
+exec "$PY" "$SCRIPT_DIR/banned_scan.py" "$@"

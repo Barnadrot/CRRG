@@ -188,6 +188,35 @@ Stages B–G are out of scope for the current work and remain `DEFERRED`.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-19` — fix: the gate could not run from a fresh clone, on Linux
+
+Three portability defects, all introduced by the Windows workstation used as an
+intermediary during the Stage B session, and all invisible from that box.
+
+**1. Two gate scripts were committed without the executable bit.**
+`scripts/crrg-audit` and `scripts/crrg-banned` were recorded in the git index as
+`100644`. `crrg-check` invokes both directly, so step 4 died with
+`Permission denied` on any fresh clone. It passed on the machine that wrote them
+only because the working-tree bit was set there while git's `core.filemode` was
+off. `CHG-18`'s claim that the gate "passes from a clean tree" was therefore
+false as committed.
+
+Fixed with `git update-index --chmod=+x`, and `crrg-check` gains a **step 1**
+that reads the *index* — not the filesystem — and fails if any `scripts/crrg-*`
+entry is not `100755`. Checking the filesystem would have reproduced the
+original blind spot exactly.
+
+**2. `crrg-banned` invoked `python`.** Stock Linux ships `python3` and no
+`python`; the name only resolves on Windows or inside a conda environment. The
+script now probes for `python3`, then `python`, and honours `$PYTHON`.
+
+**3. `stage-b-check` reached past `crrg-banned` into `banned_scan.py`** with the
+same hard-coded `python`. It now calls `crrg-banned`, so the interpreter
+decision lives in one place.
+
+**Verified on Linux** (16 cores, 61 GiB): `scripts/crrg-check` passes all six
+steps, and the step-1 guard was confirmed to fail when the bit is flipped back.
+
 #### `CHG-18` — docs: close out the conformance matrix and refresh `README.md`
 
 Updates section 1 to reflect the state at the end of this work, and renumbers its
