@@ -410,7 +410,45 @@ git configuration that does not track file mode.
 
 ---
 
-## 11. Recommended posture
+## 11. The finding was fed back into the research lane
+
+Owner-directed, after the review corrections. `yukon-lower-bound` @ **`22ba8969`**,
+`iter 195: hold yukon_delta=307083/1048576 target=extension-list-refuted`.
+
+**`crrg-stage-d-yukon` was not merged.** Only the theorem was ported, restated in
+the lane's own vocabulary, so the experiment branch stays an experiment.
+
+What landed:
+
+- `YukonExtensionListRefuted.lean` in `ReferenceResults`, mirrored byte-identically
+  into `LowerEnv/SubmissionLower` as the lane's gate requires. Nine theorems.
+  `extensionList_false_of_small_budget` is stated **radius-generically**, so it
+  covers 6586, 7487 and 9433 at once and shows the failure is not a matter of
+  choosing `Bmca` better.
+- The `YukonT1Composition` prose that called the hypothesis "an equally open list
+  bound" is corrected in both copies, with the superseded text retained.
+- A correction box at the head of `state/yukon-soundness/FRONTIER.md`.
+
+What deliberately did **not** change: the metric is unmoved at
+`ProtocolClaim 6399 307083 1048576`; the rungs are not refuted, only one
+decomposition of them; and 182's result stands — `YukonMCACountAt` itself resists
+this witness, because `IsMCA`'s failing-row clause is exactly what the
+extension-list over-approximation drops.
+
+`scripts/squeeze/yukon_verify.sh` passes, exit 0, 63.99 bits, axioms ⊆ kernel-3,
+mirror diff clean.
+
+**The lane's own audit caught a defect in my correction**, which is worth
+recording because it is the same class of error the audit was built for. Its
+header check requires a refuted claim to be flagged in prose, and my flag read
+`**is\nDEAD**` — split by line wrapping, so the literal `is DEAD` was absent and
+the check fired. Iteration 190 added that check precisely because iteration 188
+"lost one to line wrapping and only noticed by hand". Fixed; the audit now
+reports no problems.
+
+---
+
+## 12. Recommended posture
 
 Matching the owner's standing verdict:
 
