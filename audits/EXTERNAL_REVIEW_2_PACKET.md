@@ -15,7 +15,7 @@
 | CRRG pinned by Stage B/C adapters | `003b7fa7263a88246192532c30f17f859de84991` |
 | CRRG pinned by the Stage D adapter | `af267674f22392e5778491fc30f9bfdbad2067fa` |
 | Stage B — known-proof calibration at 6399 | `crrg-stage-b-yukon` @ `951ef126` |
-| Stage C — source-visible reconstruction calibration | `crrg-stage-c-yukon` @ `339a705e` |
+| Stage C — source-visible reconstruction calibration | `crrg-stage-c-yukon` @ `f3bac333` |
 | Stage D — frozen iter165 research backtest | `crrg-stage-d-yukon` @ `2dc5912f` |
 | Stage D research checkout base | `f758c1b18a301fe76675cb628027360268bb15cb` (Yukon iteration 165) |
 
@@ -295,7 +295,10 @@ retrospective calibration. Only the exact type-link is.
 ### Stage C — source-visible reconstruction calibration (`339a705e`)
 
 Seven sealed candidates, fresh agent context each, reference proofs mechanically
-forbidden. **Six `CERTIFIED`, one `REFUTED`** with a real `¬P`. Zero forbidden
+forbidden. **Six `CERTIFIED`, one `REFUTED`** with a real `¬P`. The gate reports
+those two states separately: a refutation is a successful resolution but it is
+not a promotion, and an earlier version of the gate collapsed both into one
+`Promoted:` count. Zero forbidden
 routes, seal violations, weakening attempts or substitutions.
 
 Three limits are recorded in `state/crrg-stage-c/ledger.md` and matter more than

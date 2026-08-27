@@ -164,7 +164,7 @@ the staged implementation plan (§15). Do not reconcile the two.
 | Stage | Requirement | Status | Ref |
 |-------|-------------|--------|-----|
 | B | Known-proof calibration at 6399, decomposition in the **root lineage** | DONE | `crrg-stage-b-yukon` @ `951ef126` |
-| C | Source-visible reconstruction calibration, 7 sealed candidates | DONE | `crrg-stage-c-yukon` @ `339a705e` |
+| C | Source-visible reconstruction calibration, 7 sealed candidates | DONE | `crrg-stage-c-yukon` @ `f3bac333` |
 | D | Frozen iter165 / 7487 historical backtest | DONE | `crrg-stage-d-yukon` @ `2dc5912f` |
 | E–G | Soundness shadow mode and beyond | BLOCKED | forbidden before External Review 2 (§12) |
 
