@@ -282,7 +282,7 @@ An agent must **not** weaken or rename the target, substitute a different benchm
 
 ---
 
-## 8. Implementation status at v0.7.1
+## 8. Implementation status at v0.7.2
 
 ### DONE — generic CRRG core / hardening
 
@@ -326,14 +326,14 @@ An agent must **not** weaken or rename the target, substitute a different benchm
 - [x] Stage C establishes promotion/tooling usability, **not theorem-discovery cost**.
 - [x] Zero MALFORMED outcomes and zero agent weakening attempts are explicitly null results, not evidence of defence quality.
 
-### NEXT — Stage D historical research backtest
+### DONE — Stage D historical research backtest
 
-- [ ] Create `crrg-stage-d-yukon` from exact commit `f758c1b18a301fe76675cb628027360268bb15cb`.
-- [ ] Transplant only neutral CRRG plumbing needed for the historical experiment.
-- [ ] Do not expose post-iter165 Yukon mathematics, state prose, theorem names, or later target decisions to research agents.
-- [ ] Freeze exact root `ProtocolClaim 7487 349526 1048576`.
-- [ ] Use later history only in an evaluator-side checkout after agent output.
-- [ ] Mechanically reject any root substitution rather than teaching the agent the known later failure mode.
+- [x] `crrg-stage-d-yukon` created from exact commit `f758c1b18a301fe76675cb628027360268bb15cb`.
+- [x] Only neutral CRRG plumbing transplanted; no Stage B/C material.
+- [x] No post-iter165 Yukon mathematics, state prose, theorem names or target decisions exposed to research agents.
+- [x] Root frozen at `ProtocolClaim 7487 349526 1048576`.
+- [x] Later history used only evaluator-side, after agent output.
+- [x] Root substitution mechanically rejected; the later 6400 regression was never named in a task prompt, and neither agent proposed a substitution.
 
 ### FORBIDDEN BEFORE EXTERNAL REVIEW 2
 
@@ -394,9 +394,28 @@ Therefore Stage C supports only these conclusions:
 
 It does **not** measure theorem-discovery cost, target-drift resistance under uncertainty, MALFORMED detection in live research, or adversarial weakening behavior.
 
-### 9.3 Stage D — primary historical Yukon research backtest
+### 9.3 Stage D — primary historical Yukon research backtest — COMPLETE
 
 **Purpose:** test the actual CRRG research thesis under genuine mathematical uncertainty.
+
+**Observed result** (`crrg-stage-d-yukon` @ `2dc5912f`):
+
+```text
+T1   UNCHANGED    claim matched observation
+T2   REFUTED      Lean term of ¬ P, seal intact, axiom closure kernel-3
+```
+
+Both agents were blind to post-cutoff history and neither proposed a target
+substitution. The frozen root is unchanged: one *decomposition* of it was
+refuted, not the target.
+
+The four findings — the T2 historical rediscovery and its propagation to a seam
+the historical lane left standing, root preservation under route death, T1's
+honest null, and the gap between logical and strategic refinement — are set out
+in `audits/EXTERNAL_REVIEW_2_PACKET.md`, which is the review deliverable. The
+artifact-recovery caveat recorded there is normative: the T2 result is
+mathematically reverified, but byte identity with the first delivered file cannot
+be established.
 
 #### 9.3.1 Historical isolation is mandatory
 
@@ -534,10 +553,10 @@ External Review 2 occurs after:
 A. generic core / hardening                         DONE
 B. faithful 6399 reconstruction                    DONE
 C. source-visible damaged-proof calibration        DONE
-D. frozen iter165 / 7487 historical backtest       complete enough to evaluate behavior
+D. frozen iter165 / 7487 historical backtest       DONE
 pinned-SHA downstream dependency                    verified
 seal / forbid / axiom / negative-test gates         verified downstream
-Spec.md                                               current
+Spec.md                                               current (this revision)
 ```
 
 External Review 2 must inspect the exact CRRG/downstream SHAs, final Stage B graph, Stage C limitations/results, Stage D isolation and 7487 root, any attempted target substitutions, seal scope and registry behavior, downstream promotion tooling, negative tests/axiom closure, generic-core boundary, and agent DX.
@@ -566,7 +585,7 @@ Deeper prose research structure does not become trusted graph structure until ex
 
 ---
 
-## 14. Acceptance criteria for v0.7.1
+## 14. Acceptance criteria for v0.7.2
 
 - [x] `crrg-hardening` is the only active CRRG staging line.
 - [x] CRRG builds independently and remains application-agnostic.
@@ -577,11 +596,11 @@ Deeper prose research structure does not become trusted graph structure until ex
 - [x] Stage B certified root graph contains MCA/list/budget decomposition and alignment refinement.
 - [x] Stage C has separate raw results and documented blindness limitations.
 - [x] Candidate-promotion engineering cost is recorded without pretending it is mathematical progress.
-- [ ] Stage D branch is created from exact iter165 commit `f758c1b18a301fe76675cb628027360268bb15cb`.
-- [ ] Stage D research checkout contains no post-iter165 mathematical answers.
-- [ ] Stage D primary target is exactly `ProtocolClaim 7487 349526 1048576`.
-- [ ] Any substituted root is mechanically rejected without leaking the known later 6400 regression into the task prompt.
-- [ ] Stage D reporting distinguishes `CERTIFIED`, `REFUTED`, `MALFORMED`, `UNCHANGED`, and `TOOLING_FAILURE` rather than collapsing them into promotion.
+- [x] Stage D branch is created from exact iter165 commit `f758c1b18a301fe76675cb628027360268bb15cb`.
+- [x] Stage D research checkout contains no post-iter165 mathematical answers.
+- [x] Stage D primary target is exactly `ProtocolClaim 7487 349526 1048576`.
+- [x] Any substituted root is mechanically rejected without leaking the known later 6400 regression into the task prompt.
+- [x] Stage D reporting distinguishes `CERTIFIED`, `REFUTED`, `REFINED`, `MALFORMED`, `INVALID`, `SUPERSEDED`, `UNCHANGED` and `TOOLING_FAILURE` rather than collapsing them into promotion.
 - [x] No CRRG-directed live Soundness scheduling has begun.
 
 ---

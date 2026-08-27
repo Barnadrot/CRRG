@@ -38,9 +38,10 @@ precisely, because the precise version is stronger than the loose one.**
 
 ### What the Stage D agent did
 
-Working in a checkout frozen at iteration 165, with no remote, no post-cutoff
-commit in its object store and no network, an agent was given the sealed
-obligation
+Working in a checkout frozen at iteration 165 — **no git remote and no
+post-cutoff commit in its object store**, so the corpus boundary was structural
+and hard; network blocking was soft (see §9) and **no network attempt was
+observed** — an agent was given the sealed obligation
 
 ```lean
 StageD.T2Obligation :=
@@ -71,9 +72,22 @@ Iteration **176** — post-cutoff, invisible to the agent — recorded
 > Take `U₀ = 0` and `U₁ = ε` with `wt(ε) = 1` … for EVERY `z`, the line point
 > `z·ε` agrees with the codeword `0` on `≥ n − 1 = 262143` coordinates … So
 > `lineAgreeSet baseCode δ U = univ`, of size `|F| = p⁶ ≈ 9.36 × 10⁵⁵`, while
-> every admissible `Bm` is at most `274980728111395087 ≈ 2.7 × 10¹⁷`.
+> every admissible `Bm` is at most `274980728110795087 ≈ 2.7 × 10¹⁷`.
 
-Same witness. Same mechanism. Same two magnitudes, to the digit.
+**Same witness, same mechanism, same `p⁶` obstruction, comparable budget scale.**
+
+The budgets are *not* the same integer, and it would be wrong to say they were.
+Both derive from `⌊p⁶/2¹²⁸⌋ = 274980728111395087` minus that route's own
+list-side charge, and the charges differ:
+
+| | admissible budget | charge deducted |
+|---|---|---|
+| iter176, line-count route | `274980728110795087` | `600000` |
+| Stage D, extension-list route | `274980727046041871` | `2 · 532676608` |
+
+Both are ≈ `2.75 × 10¹⁷`, and both are short of `p⁶ ≈ 9.36 × 10⁵⁵` by nearly
+forty orders of magnitude. That gap, not the exact integer, is what makes the
+obstruction fatal on either route.
 
 ### The part that is not merely a rediscovery
 
@@ -118,7 +132,7 @@ development's, not the harness's.
 ### What it is fair to conclude
 
 An eleven-iteration lookahead was reproduced in one session by an agent that
-could not see it — and then carried one step further than the record ever took
+could not reach it — and then carried one step further than the record ever took
 it. That is a real result about CRRG's value, and it should still be read with
 its limits: **n = 1**, the obstruction is elementary once seen, and CRRG's
 contribution was to make the obligation *exact and refutable*, not to find the
