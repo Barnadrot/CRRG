@@ -1,7 +1,7 @@
 # Certified Research Reduction Graph (CRRG)
 ## Kernel-checked research reduction and agent credit assignment
 
-**Status:** v0.7.1 — Stage B/C calibrated; Stage D is next.  
+**Status:** v0.7.2 — Stage D complete; awaiting External Review 2.  
 **Authority:** this file is the sole normative CRRG design / execution document. `CHANGELOG.md` records history and implementation findings; it does not choose targets or override this spec. Downstream notes are evidence only.  
 **Repository architecture:** CRRG is a standalone general-purpose Lean repository consumed as a pinned dependency by research projects.  
 **First integration / research test:** `Barnadrot/proximity-research`, using controlled Yukon lower-bound history before any CRRG-directed live Soundness work.  
