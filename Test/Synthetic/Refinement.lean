@@ -102,3 +102,34 @@ so an unproved leaf cannot be retired. -/
 #expect_failure
 private def bogusRetire : Frontier rootGoal :=
   base.retireLeaf baseDec T2.a _root_.trivial
+
+/-! ## Sibling preservation, generically
+
+The three `example`s above establish preservation for *this* frontier by `rfl`.
+That is what every downstream adapter had been reduced to doing, once per task
+type and once per generation. The theorems below are the generic statements the
+library now ships, and these are their regression tests: each is instantiated at
+the concrete frontier and checked to agree with the `rfl` facts above. -/
+
+/- Named rather than written inline as `by decide`: at the use site the type is
+`base.Task`, a projection of an ordinary `def`, which instance search does not
+unfold — the error reads `failed to synthesize Decidable (T2.b ≠ T2.a)` and
+looks like a missing instance when the instance is right there. Stated here,
+where the type is plainly `T2`, it elaborates. -/
+private theorem b_ne_a : T2.b ≠ T2.a := by decide
+private theorem a_ne_b : T2.a ≠ T2.b := by decide
+
+example : refined.leaf T2.a = strongerChild :=
+  base.refineLeaf_leaf baseDec T2.a edgeA
+
+example : refined.leaf T2.b = base.leaf T2.b :=
+  base.refineLeaf_preserves baseDec T2.a edgeA T2.b b_ne_a
+
+example (h : T2.b ≠ T2.a) : split2.leaf (.inl ⟨T2.b, h⟩) = base.leaf T2.b :=
+  base.splitLeaf_preserves baseDec T2.a coverA T2.b h
+
+example : split2.leaf (.inr Half.small) = coverA.child Half.small :=
+  base.splitLeaf_branch baseDec T2.a coverA Half.small
+
+example (h : T2.a ≠ T2.b) : retired.leaf ⟨T2.a, h⟩ = base.leaf T2.a :=
+  base.retireLeaf_preserves baseDec T2.b _root_.trivial T2.a h

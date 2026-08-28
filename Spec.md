@@ -1,7 +1,7 @@
 # Certified Research Reduction Graph (CRRG)
 ## Kernel-checked research reduction and agent credit assignment
 
-**Status:** v0.7.2 — Stage D complete; awaiting External Review 2.  
+**Status:** v0.8.0 — External Review 2 complete; first live deployment is Yukon, in bounded active autoresearch.  
 **Authority:** this file is the sole normative CRRG design / execution document. `CHANGELOG.md` records history and implementation findings; it does not choose targets or override this spec. Downstream notes are evidence only.  
 **Repository architecture:** CRRG is a standalone general-purpose Lean repository consumed as a pinned dependency by research projects.  
 **First integration / research test:** `Barnadrot/proximity-research`, using controlled Yukon lower-bound history before any CRRG-directed live Soundness work.  
@@ -74,7 +74,7 @@ For the Yukon adapter the correct scope discovered during integration is:
 ProximityPrize,YukonGraph
 ```
 
-or the analogous graph namespace for the stage being checked.
+or the analogous graph namespace for the stage being checked — `ProximityPrize,CrrgLive` for the live deployment.
 
 Do not rely on an accidentally narrow namespace prefix. A seal that omits a mutable semantic dependency is not a seal.
 
@@ -112,13 +112,22 @@ crrg-stage-c-yukon
   = completed damaged-proof / source-visible reconstruction calibration
 
 crrg-stage-d-yukon
-  = NEW branch for historical research backtest; MUST start from iter165 commit
+  = completed historical research backtest; started from the iter165 commit
+
+crrg-yukon
+  = THE LIVE DEPLOYMENT (§16). Descends from the current yukon-lower-bound
+    head. The research agent runs here and nowhere else.
+
+crrg-shadow-soundness
+  = incomplete Stage E shadow work; see §13
 
 soundness
-  = live research lane; untouched by CRRG-directed scheduling before review
+  = live research lane; untouched by CRRG-directed scheduling
 ```
 
 Do not merge CRRG experiment branches into `yukon-lower-bound`. They are experiments *against* the historical record.
+
+`crrg-yukon` is not an experiment branch — it is a live lane — but it is still not merged into `yukon-lower-bound` by the research agent. Promoting live CRRG results back into the canonical record is an owner decision, and the canonical lane is protected from direct research-agent writes (§16.1).
 
 ---
 
@@ -282,7 +291,7 @@ An agent must **not** weaken or rename the target, substitute a different benchm
 
 ---
 
-## 8. Implementation status at v0.7.2
+## 8. Implementation status at v0.8.0
 
 ### DONE — generic CRRG core / hardening
 
@@ -303,6 +312,7 @@ An agent must **not** weaken or rename the target, substitute a different benchm
 - [x] Semantic seal hash + verification / registry.
 - [x] Multi-namespace seal scope discovered and implemented during Yukon integration.
 - [x] Synthetic replay patterns only; real Yukon fixture downstream.
+- [x] Leaf preservation is a shipped generic theorem for all three frontier operators, not an obligation each adapter re-proves (found by live deployment; see §16).
 
 ### DONE — Stage B known-proof calibration
 
@@ -335,11 +345,16 @@ An agent must **not** weaken or rename the target, substitute a different benchm
 - [x] Later history used only evaluator-side, after agent output.
 - [x] Root substitution mechanically rejected; the later 6400 regression was never named in a task prompt, and neither agent proposed a substitution.
 
-### FORBIDDEN BEFORE EXTERNAL REVIEW 2
+### DONE — External Review 2
 
-- [ ] No CRRG-directed live Soundness scheduling.
-- [ ] No target selection by the implementation agent.
+- [x] Review packet assembled and delivered (`audits/EXTERNAL_REVIEW_2_PACKET.md`).
+- [x] Review closed by owner decision. Live deployment is authorised; see §13.
+
+### STANDING PROHIBITIONS
+
+- [ ] No target selection by the implementation agent. Target selection inside a live deployment belongs to the research agent and is bounded by §16.4.
 - [ ] No ArkLib upstreaming.
+- [ ] No CRRG-directed live Soundness scheduling — **delayed by owner decision**, not by an open review item (§13).
 
 ---
 
@@ -561,13 +576,15 @@ Spec.md                                               current (this revision)
 
 External Review 2 must inspect the exact CRRG/downstream SHAs, final Stage B graph, Stage C limitations/results, Stage D isolation and 7487 root, any attempted target substitutions, seal scope and registry behavior, downstream promotion tooling, negative tests/axiom closure, generic-core boundary, and agent DX.
 
-**Do not start CRRG-directed live Soundness research before this review.**
+**COMPLETE.** The packet is `audits/EXTERNAL_REVIEW_2_PACKET.md`; the review is closed and live deployment is authorised under §13 and §16.
 
 ---
 
-## 13. Soundness deployment after review
+## 13. Soundness deployment — DELAYED BY OWNER DECISION
 
-After External Review 2, CRRG may enter Soundness first in shadow mode.
+After External Review 2, CRRG may enter Soundness first in shadow mode. **The owner has delayed that deployment.** The first live deployment is Yukon instead (§16). This section stays normative for whenever Soundness is scheduled; nothing in it is withdrawn.
+
+Shadow-mode work exists in `crrg-shadow-soundness` and is explicitly incomplete: the graph module builds and transcribes the seam below, and the cross-iteration observer does not. Nothing there may be cited as a Stage E finding.
 
 The initial certified Soundness seam remains:
 
@@ -639,3 +656,115 @@ recompute active frontier
 ```
 
 > **Research freedom lives below an immutable theorem target. The graph may grow, compress, backtrack, and retire routes; the target does not drift.**
+
+---
+
+## 16. Live deployment — mode, and the rules a live research agent runs under
+
+§13's shadow mode observes an executor. A **live deployment** is the other thing: CRRG governs a research programme that is actually running, and the agent inside it changes the graph. This section is the generic contract for that mode. It is application-agnostic on purpose — the first live deployment is Yukon, and every Yukon-specific numeral, seam and ladder stays downstream in `proximity-research`.
+
+### 16.1 Mode
+
+```text
+mode                  bounded active autoresearch
+concurrency           ONE research agent, one persistent process
+root                  immutable within an epoch
+root completion       permits an upward epoch transition, autonomously
+canonical lane        protected from direct research-agent writes
+```
+
+**One agent.** A live deployment is not a calibration. Comparative lanes, A/B researchers and diligence sampling belong to Stages B–D, which are finished; running them again inside a live programme buys another synthetic comparison at the price of the thing actually worth measuring, which is whether the agent moves the target.
+
+### 16.2 Epochs
+
+A live programme is a sequence of **epochs**. An epoch fixes:
+
+```text
+bank    the strongest claim certified so far, from any source
+root    the exact sealed target under research
+```
+
+Within an epoch the root is immutable. The agent may close, refute, refine or split leaves, and may step back to a certified ancestor. It may not replace the root, and this is enforced by types and seals, not by prose: every frontier operator returns a `Frontier root` for the epoch's own `root`, so a moved target is a different type and no operator produces one.
+
+### 16.3 Root completion is a transition, not a stop
+
+When every leaf closes and the exact root becomes certified, the programme does **not** halt:
+
+```text
+1. bank the completed claim
+2. freeze the completed epoch; its graph is retained as immutable history
+3. open a new epoch
+4. select and seal a strictly stronger target
+5. continue
+```
+
+That is a new-root transition *after success*. It is categorically different from mutating an open root, and an implementation that cannot tell the two apart has not implemented this section.
+
+### 16.4 Monotone upward target selection
+
+After completing an epoch the research agent selects the next target without asking the owner, **subject to a mechanical rule and nothing else**. A new target must:
+
+```text
+be an exact target triple, not prose
+be strictly stronger than the bank in the project's own metric
+be strictly stronger in the underlying certified quantity, not only in the score
+lie strictly inside the currently certified-safe region
+typecheck
+be sealed before research begins
+record its relation to the bank
+```
+
+Rejected: an equal target, a weaker one, a retreat to an easier underlying parameter, a re-parameterisation that does not strictly improve, an unsealed prose target, and anything at or beyond the certified ceiling.
+
+The certified-safe region is **live state**, not a constant. It must be re-read from the project's own upper-bound record at every epoch transition, because a stronger external upper bound lowers it and a target that was legal last epoch may not be legal this one.
+
+Where a project has a canonical parameter order and an actual monotonicity theorem, §10.2's `MonotoneFamily` applies and local numerical reward is available. Where it does **not** — where the implication between claims at different parameters is unproved — a live deployment must not declare the family anyway. The admissibility rule above is a decidable predicate over the target's own numerals and asserts no implication; that is the honest encoding, and it is the one to use.
+
+### 16.5 External supersession
+
+A live programme is not the only thing proving theorems. Before each research **session or resume** — not each iteration — the programme checks the project's authoritative external result against its pin:
+
+```text
+external unchanged, or weaker than the bank   continue the epoch
+stronger than the bank, below the root        bank it; keep the root; update provenance
+at or above the active root                   mark the epoch SUPERSEDED; bank; open a
+                                              stronger epoch; continue
+```
+
+Supersession is **not** an agent proof and is never counted as one. The sync must be explicit and logged, and its pin must name an exact external commit; a floating branch reference is not a pin.
+
+### 16.6 Governance is not research
+
+The research agent writes attempts, candidate propositions, proofs, research notes, and approved state-transition outputs. It does **not** write its own programme, the gate, the seal implementation, the outcome classifier, the epoch-transition rules, the dependency pin, or the protected root definitions.
+
+The live gate must detect drift in those files by hash and fail on it. A genuinely required change to any of them is an implementation change made by an implementation agent under review, not a research iteration.
+
+### 16.7 Refinement is not a reward currency
+
+§4.5's meaning of a certified refinement is unchanged and must not be relaxed in a live setting: a `REFINED` outcome means **the child suffices for the parent**, proved. It does not mean the research became easier, and refinement count is not a metric. A live deployment may let the agent activate a certified refinement, and should require it to record a short strategic reason for doing so, but must not reward the act. Restatements that change nothing remain graph history and do not replace the active leaf.
+
+No live deployment is required to decide general semantic "easier than". It is not solved here and must not be faked.
+
+### 16.8 Reporting
+
+The live loop reports exactly the §9.3.4 vocabulary — `CERTIFIED`, `REFUTED`, `REFINED`, `MALFORMED`, `INVALID`, `SUPERSEDED`, `UNCHANGED`, `TOOLING_FAILURE` — one line per live task, and no aggregate progress magnitude (§5.6, §14.2 item 7). Epoch history is retained; a completed epoch is never deleted to make the current one look cleaner.
+
+---
+
+## 17. Acceptance criteria for a live deployment
+
+Generic; each is a mechanical check the deployment's own gate must run before an agent is launched.
+
+- [ ] The external result pin is exact (commit, version, metric, and the exact claim), internally consistent, and a stale pin fails.
+- [ ] The exact epoch root passes its type-link; adjacent and wrong roots fail.
+- [ ] Any lineage the project has formally refuted is not the live lineage, and that is a theorem rather than a grep.
+- [ ] A valid proof yields `CERTIFIED`; a valid `¬ P` yields `REFUTED`.
+- [ ] A valid `Edge` refinement and a valid `Split` refinement both yield `REFINED`.
+- [ ] A hole-backed refinement is rejected by the axiom audit.
+- [ ] An unrelated or easier proposed child is rejected.
+- [ ] An open root cannot be changed; a completed root can be banked.
+- [ ] An equal or weaker next target is rejected; a strictly stronger one inside the certified ceiling is accepted.
+- [ ] A prior epoch remains available as immutable history.
+- [ ] A stronger external floor updates the bank; one below the root does not mutate the root; one reaching the root supersedes the epoch and is not counted as agent proof.
+- [ ] The research agent cannot edit its own programme, the gate, or the transition policy; ordinary attempt files remain writable.
+- [ ] The project's own pre-existing verification gate runs **unchanged** and passes.

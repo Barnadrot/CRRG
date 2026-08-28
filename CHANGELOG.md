@@ -196,6 +196,60 @@ the staged implementation plan (§15). Do not reconcile the two.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `SPEC-09` / `CHG-29` — v0.8.0: live deployment mode, and the leaf-preservation theorems it needed
+
+Two changes, and the second was found by the first.
+
+**Spec.** External Review 2 is closed and the owner has delayed Soundness, so the
+first live deployment is Yukon. §13 keeps its normative content and records the
+delay as an owner decision rather than an open review item — it also records that
+the shadow-mode work in `crrg-shadow-soundness` is incomplete and that nothing
+there may be cited as a Stage E finding. Two new sections carry the deployment
+contract, generically:
+
+- **§16 Live deployment.** Mode (`bounded active autoresearch`, one agent),
+  epochs with an immutable root, root completion as an upward *transition* rather
+  than a stop, the monotone target-selection rule, external supersession, the
+  governance/research separation, and the standing rule that refinement is not a
+  reward currency.
+- **§17 Acceptance criteria for a live deployment.** Thirteen mechanical checks a
+  deployment's own gate must run before an agent is launched, ending with the
+  requirement that the project's pre-existing verification gate runs *unchanged*
+  and passes.
+
+§16.4 says one thing worth repeating here, because it is a temptation the
+implementation actually faced: where a project has no proved monotonicity theorem
+between claims at different parameters, a live deployment **must not** declare a
+`MonotoneFamily` anyway. §10.2's family requires a `monotone` field; supplying it
+with a hole would put an unproved implication inside the one structure whose
+purpose is to make numerical reward sound. The honest encoding is a decidable
+predicate over the target's own numerals, asserting no implication, and that is
+what the Yukon deployment uses.
+
+Nothing generic is weakened. §16 adds no trusted progress channel, no aggregate,
+and no new way to close a root. It is a scheduling and governance contract around
+the same kernel semantics, and every Yukon numeral stays downstream.
+
+**Implementation.** §4.5 has always said `refineLeaf`, `splitLeaf` and
+`retireLeaf` "preserve siblings", and CRRG shipped no theorem saying so. The
+property was true of the definitions and re-established by hand in every consumer
+— Stage B and Stage D each proved it again for their own concrete task types, and
+a live deployment would have had to prove it once per generation of the frontier.
+`CRRG/Frontier.lean` now carries the five generic statements
+(`refineLeaf_leaf`, `refineLeaf_preserves`, `splitLeaf_branch`,
+`splitLeaf_preserves`, `retireLeaf_preserves`), and
+`Test/Synthetic/Refinement.lean` regression-tests each by instantiating it at the
+concrete frontier already in that file and checking it agrees with the `rfl`
+facts stated there.
+
+The tests needed the same named-distinctness workaround Stage D documented: at
+the use site the argument's type is `base.Task`, a projection of an ordinary
+`def`, which instance search does not unfold, so an inline `by decide` fails with
+`failed to synthesize Decidable (T2.b ≠ T2.a)` and reads like a missing instance.
+Stating the proof where the type is plainly `T2` elaborates. That this recurred
+in CRRG's own test tree is mild evidence it should eventually be an API
+affordance rather than a documented trap.
+
 #### `CHG-28` — docs: the External Review 2 packet
 
 `audits/EXTERNAL_REVIEW_2_PACKET.md` assembles the review deliverable required by

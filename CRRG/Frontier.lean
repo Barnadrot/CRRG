@@ -94,6 +94,51 @@ def retireLeaf {root : Goal} (F : Frontier.{u} root) (dec : DecidableEq F.Task)
       (fun ht => ht ▸ proof)
       (fun ht => h ⟨t, ht⟩)
 
+/-! ### What the three operators do to the leaf set
+
+Spec 6.4 requires each operator to "preserve all other leaves", and until now
+that was a property of the *definitions* that every downstream adapter had to
+re-establish for its own frontier — Stage B and Stage D both proved it again by
+hand for their concrete task types, and a live deployment would have to do it
+once per generation. These are the generic statements, so a downstream gate can
+cite them instead of re-deriving them, and so a future edit to `refineLeaf`
+that dropped a sibling would fail here rather than in an application. -/
+
+/-- The refined leaf is exactly the child. -/
+@[simp] theorem refineLeaf_leaf {root : Goal} (F : Frontier.{u} root)
+    (dec : DecidableEq F.Task) (t₀ : F.Task) {child : Goal}
+    (e : Edge (F.leaf t₀) child) :
+    (F.refineLeaf dec t₀ e).leaf t₀ = child := by
+  simp only [refineLeaf, if_pos]
+
+/-- **Siblings survive an `Edge` refinement.** Every task other than the refined
+    one keeps its exact obligation. -/
+@[simp] theorem refineLeaf_preserves {root : Goal} (F : Frontier.{u} root)
+    (dec : DecidableEq F.Task) (t₀ : F.Task) {child : Goal}
+    (e : Edge (F.leaf t₀) child) (s : F.Task) (h : s ≠ t₀) :
+    (F.refineLeaf dec t₀ e).leaf s = F.leaf s := by
+  simp only [refineLeaf]
+  exact if_neg h
+
+/-- Each branch of the split becomes a leaf, in the right summand. -/
+@[simp] theorem splitLeaf_branch {root : Goal} (F : Frontier.{u} root)
+    (dec : DecidableEq F.Task) (t₀ : F.Task) (s : Split.{v} (F.leaf t₀))
+    (b : s.Branch) :
+    (F.splitLeaf dec t₀ s).leaf (.inr b) = s.child b := rfl
+
+/-- **Siblings survive a `Split` refinement**, as the left summand. -/
+@[simp] theorem splitLeaf_preserves {root : Goal} (F : Frontier.{u} root)
+    (dec : DecidableEq F.Task) (t₀ : F.Task) (s : Split.{v} (F.leaf t₀))
+    (t : F.Task) (h : t ≠ t₀) :
+    (F.splitLeaf dec t₀ s).leaf (.inl ⟨t, h⟩) = F.leaf t := rfl
+
+/-- **Siblings survive retirement.** Retiring one leaf changes no other
+    obligation; the task index merely loses the retired element. -/
+@[simp] theorem retireLeaf_preserves {root : Goal} (F : Frontier.{u} root)
+    (dec : DecidableEq F.Task) (t₀ : F.Task) (proof : (F.leaf t₀).claim)
+    (t : F.Task) (h : t ≠ t₀) :
+    (F.retireLeaf dec t₀ proof).leaf ⟨t, h⟩ = F.leaf t := rfl
+
 end Frontier
 
 end CRRG
