@@ -602,7 +602,9 @@ Deeper prose research structure does not become trusted graph structure until ex
 
 ---
 
-## 14. Acceptance criteria for v0.7.2
+## 14. Acceptance criteria for v0.7.2 — COMPLETE
+
+Retained as the record of what External Review 2 was reviewed against. §17 carries the criteria for a live deployment.
 
 - [x] `crrg-hardening` is the only active CRRG staging line.
 - [x] CRRG builds independently and remains application-agnostic.
