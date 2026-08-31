@@ -741,6 +741,19 @@ The research agent writes attempts, candidate propositions, proofs, research not
 
 The live gate must detect drift in those files by hash and fail on it. A genuinely required change to any of them is an implementation change made by an implementation agent under review, not a research iteration.
 
+**Detection, not prevention — and say which you have.** This section requires the gate to *detect* a governed-file edit; it does not claim the edit is impossible. A deployment must state its posture explicitly rather than let a reader infer enforcement from the word "governance":
+
+```text
+tamper-evident    the edit is possible, and it is caught and attributable
+tamper-proof      the edit cannot happen
+```
+
+A proof-of-concept deployment may be **tamper-evident** provided it says so, and provided the audit trail is real: one research iteration is one pushed commit, history is append-only (no rebase, reset, force-push, amend-after-push, or tag rewriting), and a governed-file edit is recorded as a violation rather than silently absorbed. Under that posture the launch mechanism is not a trust boundary and must not be presented as one. Hard sandboxing — a separate principal, or kernel-enforced read-only governance — is what upgrades such a deployment to tamper-proof, and until it exists the deployment must not describe itself as protected.
+
+### 16.6.1 The launch mechanism is not part of the trust model
+
+CRRG is model-agnostic. A deployment must not hardcode a vendor CLI into its harness, and must not depend on a launcher to configure the researcher: the programme is a self-sufficient operating contract, and launching is a human running whichever agent CLI they chose with one instruction to read it. Any launcher that survives is an optional convenience — it may check the branch, the governance hashes and the programme's integrity, and it must not be the only path by which a correct session can start.
+
 ### 16.7 Refinement is not a reward currency
 
 §4.5's meaning of a certified refinement is unchanged and must not be relaxed in a live setting: a `REFINED` outcome means **the child suffices for the parent**, proved. It does not mean the research became easier, and refinement count is not a metric. A live deployment may let the agent activate a certified refinement, and should require it to record a short strategic reason for doing so, but must not reward the act. Restatements that change nothing remain graph history and do not replace the active leaf.
