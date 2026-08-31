@@ -1,7 +1,7 @@
 # Certified Research Reduction Graph (CRRG)
 ## Kernel-checked research reduction and agent credit assignment
 
-**Status:** v0.8.1 — External Review 2 complete; first live deployment is Yukon, in bounded active autoresearch.  
+**Status:** v0.8.2 — External Review 2 complete; first live deployment is Yukon, in bounded active autoresearch.  
 **Authority:** this file is the sole normative CRRG design / execution document. `CHANGELOG.md` records history and implementation findings; it does not choose targets or override this spec. Downstream notes are evidence only.  
 **Repository architecture:** CRRG is a standalone general-purpose Lean repository consumed as a pinned dependency by research projects.  
 **First integration / research test:** `Barnadrot/proximity-research`, using controlled Yukon lower-bound history before any CRRG-directed live Soundness work.  
@@ -316,9 +316,22 @@ An agent receives:
 2. one exact leaf or sealed candidate proposition;
 3. allowed imports and writable files;
 4. certified sibling assumptions only;
-5. explicit forbidden declarations / namespaces where needed;
+5. explicit operator policy exclusions, including forbidden candidate IDs, declarations and namespaces;
 6. success condition: build + exact type link + axiom audit + seal/forbid checks;
 7. failure options: counterexample, impossibility theorem, certified split, or no graph change.
+
+Operator exclusions are research-policy constraints, not mathematical facts.
+
+A deployment may ban a candidate/result/declaration/namespace from future research selection or proof dependency in order to prevent repeated grinding on a settled route.
+
+A ban:
+
+- never changes the root;
+- never deletes certified graph history;
+- never certifies or refutes a proposition;
+- only restricts what future research may select or use.
+
+Where mechanically enforceable, the gate **must** enforce the exclusions using the proof/type dependency closure (`crrg-forbid`), not only prompt prose.
 
 An agent must **not** weaken or rename the target, substitute a different benchmark/radius, introduce an uncertified premise and report success, drop guard/escape branches, edit CRRG core while proving a downstream task, or choose a different root than the one frozen by this spec/task contract.
 
@@ -715,7 +728,7 @@ canonical lane        protected from direct research-agent writes
 A live programme is a sequence of **epochs**. An epoch fixes:
 
 ```text
-bank    the strongest claim certified so far, from any source
+bank    the strongest claim currently admitted by this deployment
 root    the exact sealed target under research
 ```
 
@@ -757,22 +770,30 @@ Where a project has a canonical parameter order and an actual monotonicity theor
 
 ### 16.5 External supersession
 
-A live programme is not the only thing proving theorems. Before each research **session or resume** — not each iteration — the programme checks the project's authoritative external result against its pin:
+A live programme is not the only thing proving theorems. A downstream integration should automatically admit a newer authoritative external result when that import is mechanically certifiable.
+
+If an external verifier or challenge version changes, automatic import is permitted only when the downstream integration mechanically establishes that the certified statement against which its local graph is interpreted is unchanged.
+
+For an externally certified claim `E` that has been mechanically admitted:
 
 ```text
-external unchanged, or weaker than the bank   continue the epoch
-stronger than the bank, below the root        bank it; keep the root; update provenance
-at or above the active root                   mark the epoch SUPERSEDED; bank; open a
-                                              stronger epoch; continue
+E weaker than or equal to the bank       no graph change
+bank < E < root                           bank E; update provenance; root unchanged
+E at or above the active root             mark the epoch SUPERSEDED; bank E; open a
+                                           stronger admissible epoch; continue
 ```
 
-Supersession is **not** an agent proof and is never counted as one. The sync must be explicit and logged, and its pin must name an exact external commit; a floating branch reference is not a pin.
+Supersession is **not** an agent proof and is never counted as one. The admitted external state must name an exact external commit; a floating branch reference is not a pin.
+
+If an external result cannot be mechanically imported, it is not admitted into CRRG state. The currently admitted exact pin remains authoritative. External synchronization and application-specific compatibility checks live in the downstream integrator.
 
 ### 16.6 Governance is not research
 
 The research agent writes attempts, candidate propositions, proofs, research notes, and approved state-transition outputs. It does **not** write its own programme, the gate, the seal implementation, the outcome classifier, the epoch-transition rules, the dependency pin, or the protected root definitions.
 
 The live gate must detect drift in those files by hash and fail on it. A genuinely required change to any of them is an implementation change made by an implementation agent under review, not a research iteration.
+
+Sanctioned state transitions are not governance edits. Examples include appending a fresh candidate seal, activating a certified refinement, advancing a completed epoch, and admitting an externally certified result through the deployment's governed transition machinery. The code that implements such transitions may itself be governed; the state it is authorized to update must remain mutable through that bounded path.
 
 **Detection, not prevention — and say which you have.** This section requires the gate to *detect* a governed-file edit; it does not claim the edit is impossible. A deployment must state its posture explicitly rather than let a reader infer enforcement from the word "governance":
 
@@ -783,9 +804,41 @@ tamper-proof      the edit cannot happen
 
 A proof-of-concept deployment may be **tamper-evident** provided it says so, and provided the audit trail is real: one research iteration is one pushed commit, history is append-only (no rebase, reset, force-push, amend-after-push, or tag rewriting), and a governed-file edit is recorded as a violation rather than silently absorbed. Under that posture the launch mechanism is not a trust boundary and must not be presented as one. Hard sandboxing — a separate principal, or kernel-enforced read-only governance — is what upgrades such a deployment to tamper-proof, and until it exists the deployment must not describe itself as protected.
 
-### 16.6.1 The launch mechanism is not part of the trust model
+### 16.6.1 Live launch
 
-CRRG is model-agnostic. A deployment must not hardcode a vendor CLI into its harness, and must not depend on a launcher to configure the researcher: the programme is a self-sufficient operating contract, and launching is a human running whichever agent CLI they chose with one instruction to read it. Any launcher that survives is an optional convenience — it may check the branch, the governance hashes and the programme's integrity, and it must not be the only path by which a correct session can start.
+CRRG provides a generic live-launch command.
+
+The command is invoked from the downstream repository and receives a downstream-owned live configuration containing:
+
+- programme file;
+- working repository / branch;
+- model adapter configuration;
+- operator exclusions;
+- downstream preflight and gate commands.
+
+CRRG owns the generic dispatch semantics. The downstream integrator owns all application-specific configuration.
+
+A live deployment must support at least these adapter classes:
+
+- Codex;
+- Kimi;
+- Claude.
+
+Each adapter must run in its vendor-equivalent unattended / full-permission mode so permission prompts do not stall autonomous research.
+
+CRRG must not infer vendor flags. The downstream configuration supplies the exact executable and argument vector for each adapter.
+
+Canonical invocation:
+
+```text
+crrg-live-run --config <downstream-config> --model codex
+crrg-live-run --config <downstream-config> --model kimi
+crrg-live-run --config <downstream-config> --model claude
+```
+
+The launcher passes one instruction to the selected agent to read the downstream programme fully and start.
+
+The launcher is orchestration, not a mathematical trust boundary.
 
 ### 16.7 Refinement is not a reward currency
 
@@ -854,3 +907,15 @@ Adjudicating `REFINED` is not enough, and a suite that stops there will certify 
 - [ ] A stronger external floor updates the bank; one below the root does not mutate the root; one reaching the root supersedes the epoch and is not counted as agent proof.
 - [ ] The research agent cannot edit its own programme, the gate, or the transition policy; ordinary attempt files remain writable.
 - [ ] The project's own pre-existing verification gate runs **unchanged** and passes.
+- [ ] Operator-banned candidate IDs cannot be selected as new live work.
+- [ ] Operator-banned declarations or namespaces are rejected from submitted proof dependency closure where mechanically enforceable.
+- [ ] Adding a ban does not mutate the root, certified graph, or prior graph history.
+- [ ] `crrg-live-run` launches a downstream programme through the configured Codex adapter.
+- [ ] `crrg-live-run` launches a downstream programme through the configured Kimi adapter.
+- [ ] `crrg-live-run` launches a downstream programme through the configured Claude adapter.
+- [ ] All three adapters use downstream-declared unattended / full-permission execution arguments; CRRG does not infer vendor flags.
+- [ ] Model selection changes no mathematical CRRG state.
+- [ ] A compatible newer external result can be imported automatically by a downstream integration.
+- [ ] A compatible external improvement below the root moves the bank only.
+- [ ] A compatible external result reaching the root triggers `SUPERSEDED` and an upward epoch transition.
+- [ ] External state whose statement compatibility cannot be mechanically certified is not admitted into CRRG state.
