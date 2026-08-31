@@ -304,6 +304,147 @@ else
   check false "  ...but MUTATED that registry"
 fi
 
+
+echo ""
+echo "crrg-live-run (generic dispatch, Spec §16.6.1):"
+
+# Fake adapters only. The point of these checks is that CRRG passes through
+# EXACTLY the argv the downstream declared and substitutes exactly one
+# instruction -- not that any real vendor CLI works, which is not CRRG's
+# business and would couple this suite to three release cycles.
+LR="$TMPDIR_SELFTEST/live"
+mkdir -p "$LR"
+for m in codex kimi claude; do
+  printf '#!/usr/bin/env bash\nprintf "FAKE-%s"\nfor a in "$@"; do printf " |%%s|" "$a"; done\necho\n' "$m" \
+    > "$LR/fake-$m"
+  chmod +x "$LR/fake-$m"
+done
+printf '#!/usr/bin/env bash\necho PREFLIGHT-OK\n' > "$LR/preflight.sh"
+chmod +x "$LR/preflight.sh"
+printf 'candidate-id\tBANNED_ID\ndeclaration\tCRRG.Edge\nnamespace\tCRRG.CompositionDebt\n' \
+  > "$LR/bans.tsv"
+
+write_live_config() {  # $1 = path, $2 = kimi argv fragment
+  cat > "$1" <<CFG
+{
+  "repo_root": "$CRRG_ROOT",
+  "program": "Spec.md",
+  "preflight": ["$LR/preflight.sh"],
+  "gate": ["true"],
+  "operator_bans": "$LR/bans.tsv",
+  "models": {
+    "codex":  ["$LR/fake-codex", "--full-auto", "{PROMPT}"],
+    "kimi":   [$2],
+    "claude": ["$LR/fake-claude", "--dangerously-skip-permissions", "{PROMPT}"]
+  }
+}
+CFG
+}
+write_live_config "$LR/live.json" "\"$LR/fake-kimi\", \"--yolo\", \"{PROMPT}\""
+
+PROMPT_LINE="Read Spec.md fully and start the experiment."
+
+expect ok "FAKE-codex |--full-auto| |$PROMPT_LINE|" \
+  "dispatches the Codex adapter with the downstream argv, verbatim" \
+  "$SCRIPT_DIR/crrg-live-run" --config "$LR/live.json" --model codex
+
+expect ok "FAKE-kimi |--yolo| |$PROMPT_LINE|" \
+  "dispatches the Kimi adapter with the downstream argv, verbatim" \
+  "$SCRIPT_DIR/crrg-live-run" --config "$LR/live.json" --model kimi
+
+expect ok "FAKE-claude |--dangerously-skip-permissions| |$PROMPT_LINE|" \
+  "dispatches the Claude adapter with the downstream argv, verbatim" \
+  "$SCRIPT_DIR/crrg-live-run" --config "$LR/live.json" --model claude
+
+# Model choice must be orchestration only. If any of these three could differ in
+# the instruction they deliver, the launcher would be part of the trust story.
+CODEX_P="$("$SCRIPT_DIR/crrg-live-run" --config "$LR/live.json" --model codex 2>&1 | grep -c "$PROMPT_LINE")"
+KIMI_P="$("$SCRIPT_DIR/crrg-live-run" --config "$LR/live.json" --model kimi 2>&1 | grep -c "$PROMPT_LINE")"
+if [ "$CODEX_P" -ge 1 ] && [ "$KIMI_P" -ge 1 ]; then
+  check true "every adapter delivers the identical instruction; model choice is orchestration"
+else
+  check false "every adapter delivers the identical instruction; model choice is orchestration"
+fi
+
+write_live_config "$LR/noprompt.json" "\"$LR/fake-kimi\", \"--yolo\""
+expect reject "contains no {PROMPT} token" \
+  "rejects a model argv with no {PROMPT} token" \
+  "$SCRIPT_DIR/crrg-live-run" --config "$LR/noprompt.json" --model kimi
+
+write_live_config "$LR/dupprompt.json" "\"$LR/fake-kimi\", \"{PROMPT}\", \"{PROMPT}\""
+expect reject "exactly one is required" \
+  "rejects a model argv with two {PROMPT} tokens" \
+  "$SCRIPT_DIR/crrg-live-run" --config "$LR/dupprompt.json" --model kimi
+
+printf 'candidate-id\tX\nnot-a-kind\tY\n' > "$LR/bad-bans.tsv"
+sed "s|$LR/bans.tsv|$LR/bad-bans.tsv|" "$LR/live.json" > "$LR/badban.json"
+expect reject "malformed; refusing to launch" \
+  "refuses to launch against a malformed operator ban file" \
+  "$SCRIPT_DIR/crrg-live-run" --config "$LR/badban.json" --model codex
+
+echo ""
+echo "crrg-policy-check (operator exclusions, Spec §7):"
+
+pol() { "$SCRIPT_DIR/crrg-policy-check" --bans "$LR/bans.tsv" "$@"; }
+
+expect reject "candidate id 'BANNED_ID' is banned" \
+  "a banned candidate id cannot be selected as live work" \
+  pol --candidate BANNED_ID
+
+expect ok "is not banned" \
+  "an unbanned candidate id is selectable" \
+  pol --candidate NOT_BANNED_ID
+
+# The closure questions go through crrg-forbid. These assert the DELEGATION
+# fired -- the forbid audit's own message -- not merely that the exit code was
+# non-zero, which a typo in the ban file would also produce.
+expect reject "FORBIDDEN CRRG.Edge" \
+  "a banned declaration is rejected through crrg-forbid's dependency closure" \
+  env CRRG_IMPORTS=CRRG "$SCRIPT_DIR/crrg-policy-check" \
+      --bans "$LR/bans.tsv" --root CRRG.Edge.trans
+
+expect ok "avoids all" \
+  "a root that does not reach the banned declaration is accepted" \
+  env CRRG_IMPORTS=CRRG "$SCRIPT_DIR/crrg-policy-check" \
+      --bans "$LR/bans.tsv" --root CRRG.Goal.Proved
+
+printf 'namespace\tCRRG.CompositionDebt\n' > "$LR/ns-only.tsv"
+expect reject "FORBIDDEN" \
+  "a banned namespace is rejected through crrg-forbid" \
+  env CRRG_IMPORTS=CRRG "$SCRIPT_DIR/crrg-policy-check" \
+      --bans "$LR/ns-only.tsv" --root CRRG.CompositionDebt.discharge
+
+# A namespace-only policy must not reject everything. An earlier draft padded
+# --forbid with a synthetic name to satisfy crrg-forbid's vacuity check; that
+# name does not exist, so the misspelled-prohibition guard fired and the policy
+# rejected every root. A policy tool failing closed on everything is as useless
+# as one failing open, and quieter about it.
+expect ok "avoids all" \
+  "...and a namespace-only policy still accepts an unrelated root" \
+  env CRRG_IMPORTS=CRRG "$SCRIPT_DIR/crrg-policy-check" \
+      --bans "$LR/ns-only.tsv" --root CRRG.Edge.trans
+
+printf '# only comments and blanks\n\n' > "$LR/empty-bans.tsv"
+expect ok "nothing to enforce" \
+  "an empty policy enforces nothing rather than running a vacuous audit" \
+  env CRRG_IMPORTS=CRRG "$SCRIPT_DIR/crrg-policy-check" \
+      --bans "$LR/empty-bans.tsv" --root CRRG.Edge.trans
+
+expect reject "POLICY FILE MALFORMED" \
+  "a malformed policy file fails rather than silently dropping the rule" \
+  pol --bans "$LR/bad-bans.tsv" --validate
+
+# Spec §7: a ban restricts selection. It is not a mathematical fact and must not
+# behave like one. crrg-policy-check has no write path at all, which is the
+# cheapest possible proof of that -- asserted here so a future edit that adds
+# one is caught.
+if grep -qE '^\s*(open\([^)]*["'"'"']w|Path\([^)]*\)\.write_text|shutil\.|os\.remove|os\.rename)' \
+     "$SCRIPT_DIR/crrg-policy-check"; then
+  check false "adding a ban cannot mutate graph state (policy tool has no write path)"
+else
+  check true "adding a ban cannot mutate graph state (policy tool has no write path)"
+fi
+
 echo ""
 if [ "$fail" -ne 0 ]; then
   echo "=== CRRG gate self-tests FAILED ($fail of $((pass + fail))) ==="

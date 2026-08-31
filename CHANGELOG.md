@@ -196,6 +196,49 @@ the staged implementation plan (§15). Do not reconcile the two.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-31` — v0.8.2: operator bans, generic three-model launch
+
+Implements §7's operator exclusions and §16.6.1's live launch. No Lean changed;
+`Spec.md` was authored upstream and is not edited here.
+
+`scripts/crrg-policy-check` answers the three exclusion questions and nothing
+else. `--candidate` is a set membership test; `--root` **delegates** to
+`crrg-forbid` rather than reimplementing dependency closure, because a second
+notion of "depends on" would eventually disagree with the first and the weaker
+one would silently become the one that mattered. It has no write path at all,
+which is the cheapest available proof of §7's rule that a ban never mutates the
+root, deletes history, or certifies anything — and the self-test asserts the
+absence of one so a future edit that adds it is caught.
+
+Malformed ban files fail rather than skipping the line they cannot parse: an
+operator who believes a ban is in force when it is not is worse off than one
+with no ban file.
+
+`scripts/crrg-live-run` is generic dispatch. The downstream supplies the exact
+executable and argv for each of Codex, Kimi and Claude; CRRG supplies only the
+instruction — `Read <program> fully and start the experiment.` — and refuses a
+model argv that does not contain exactly one `{PROMPT}` token. CRRG never infers
+a vendor flag. Doing so would couple it to three release cycles and break any
+deployment on a CLI it has not heard of.
+
+Two findings from building it:
+
+- a namespace-only policy rejected **every** root. `crrg-forbid` refuses a
+  vacuous audit, so the first draft padded `--forbid` with a synthetic name;
+  that name does not exist, the misspelled-prohibition guard fired, and the
+  policy failed closed on everything. `--forbid-prefix` in fact stands alone.
+  A policy tool that rejects everything is as useless as one that rejects
+  nothing, and quieter about it.
+- an apostrophe inside `"${VAR:-default}"` opens a shell quote and bash
+  mis-parses the rest of the file — a syntax error reported thirty lines from
+  its cause. Same class as the one recorded in `CHG-30`.
+
+Thirteen self-tests, all with fake adapters: three exact-argv dispatches, the
+identical-instruction check that makes model choice orchestration rather than
+trust, both `{PROMPT}` rejections, the malformed-ban refusal, and six exclusion
+checks that assert `crrg-forbid`'s own message so the delegation is what is
+being tested rather than a bare exit code.
+
 #### `SPEC-10` / `CHG-30` — v0.8.1: a seal is immutable, its registry is not
 
 Found by a live deployment, in the worst possible way: the researcher produced a

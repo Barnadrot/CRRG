@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+"""Generic live-launch dispatch (Spec §16.6.1).
+
+Usage:
+    crrg-live-run --config <downstream-config.json> --model codex|kimi|claude
+
+CRRG owns the dispatch semantics. The **downstream integrator owns every
+application-specific detail**, including the exact executable and argument
+vector for each model adapter. CRRG does not infer vendor flags, does not know
+what any vendor calls its unattended mode, and must never grow a table of them:
+the moment it does, CRRG is coupled to a vendor release cycle it has no business
+tracking, and a deployment on a CLI CRRG has not heard of stops working.
+
+Config (JSON):
+
+    {
+      "repo_root": ".",
+      "program":   "<downstream programme path>",
+      "preflight": ["...", "..."],
+      "gate":      ["...", "..."],
+      "operator_bans": "<bans.tsv>",
+      "models": {
+        "codex":  ["executable", "...", "{PROMPT}"],
+        "kimi":   ["executable", "...", "{PROMPT}"],
+        "claude": ["executable", "...", "{PROMPT}"]
+      }
+    }
+
+Rules, all enforced here:
+
+* each model argv contains **exactly one** `{PROMPT}` token -- zero means the
+  agent is launched with no instruction, more than one means the instruction is
+  duplicated and the second copy silently wins on most CLIs. Both are
+  configuration bugs that look like model misbehaviour at 3am, so they are
+  rejected before anything is executed;
+* the substituted instruction is fixed by CRRG, not by the downstream:
+
+      Read <program> fully and start the experiment.
+
+  The programme file is the contract. A launcher that could vary the
+  instruction could vary the contract, and then the launcher would be part of
+  the trust story -- which §16.6.1 explicitly says it is not;
+* the downstream preflight runs first, from `repo_root`, and a non-zero exit
+  aborts the launch;
+* the model is exec'd from `repo_root`.
+
+**Model choice changes no mathematical CRRG state.** Nothing on this path
+touches a seal, a frontier, a root or a registry, and `--print-argv` exists so
+that can be inspected without running anything.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+PROMPT_TOKEN = "{PROMPT}"
+REQUIRED = ("repo_root", "program", "preflight", "gate", "operator_bans", "models")
+REQUIRED_MODELS = ("codex", "kimi", "claude")
+
+
+def fail(kind: str, msg: str) -> "NoReturn":  # type: ignore[name-defined]
+    print(f"LAUNCH REJECTED [{kind}]: {msg}", file=sys.stderr)
+    sys.exit(2)
+
+
+def load_config(path: Path) -> dict:
+    if not path.is_file():
+        fail("config", f"no config at {path}")
+    try:
+        cfg = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        fail("config", f"{path} is not valid JSON: {exc}")
+    if not isinstance(cfg, dict):
+        fail("config", f"{path} must contain a JSON object")
+
+    missing = [k for k in REQUIRED if k not in cfg]
+    if missing:
+        fail("config", f"{path} is missing required field(s): {', '.join(missing)}")
+
+    for key in ("preflight", "gate"):
+        if not isinstance(cfg[key], list) or not cfg[key] or not all(
+            isinstance(a, str) for a in cfg[key]
+        ):
+            fail("config", f"'{key}' must be a non-empty list of strings")
+
+    models = cfg["models"]
+    if not isinstance(models, dict):
+        fail("config", "'models' must be an object")
+    missing = [m for m in REQUIRED_MODELS if m not in models]
+    if missing:
+        fail(
+            "config",
+            "a live deployment must configure every adapter class "
+            f"(Spec §16.6.1); missing: {', '.join(missing)}",
+        )
+
+    for name, argv in models.items():
+        if not isinstance(argv, list) or not argv or not all(isinstance(a, str) for a in argv):
+            fail("config", f"models.{name} must be a non-empty list of strings")
+        hits = [i for i, a in enumerate(argv) if PROMPT_TOKEN in a]
+        if len(hits) == 0:
+            fail(
+                "prompt-token",
+                f"models.{name} contains no {PROMPT_TOKEN} token, so the agent would be "
+                "launched with no instruction at all.",
+            )
+        if len(hits) > 1:
+            fail(
+                "prompt-token",
+                f"models.{name} contains {len(hits)} {PROMPT_TOKEN} tokens "
+                f"(argv positions {hits}); exactly one is required. Two copies of the "
+                "instruction is a configuration bug that presents as model misbehaviour.",
+            )
+    return cfg
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(add_help=True, description="CRRG generic live launch")
+    ap.add_argument("--config", required=True)
+    ap.add_argument("--model", required=True, choices=list(REQUIRED_MODELS))
+    ap.add_argument(
+        "--print-argv",
+        action="store_true",
+        help="validate, resolve the argv, print it, and exit without running anything",
+    )
+    args = ap.parse_args()
+
+    cfg_path = Path(args.config).resolve()
+    cfg = load_config(cfg_path)
+
+    # Paths in the config are relative to the config file, so a downstream repo
+    # can be checked out anywhere.
+    base = cfg_path.parent
+    repo_root = (base / cfg["repo_root"]).resolve()
+    if not repo_root.is_dir():
+        fail("config", f"repo_root {repo_root} is not a directory")
+
+    program = cfg["program"]
+    if not (repo_root / program).is_file():
+        fail("config", f"programme {program} does not exist under {repo_root}")
+
+    bans = (base / cfg["operator_bans"]).resolve()
+    policy = Path(__file__).resolve().parent / "crrg-policy-check"
+    proc = subprocess.run(
+        [sys.executable, str(policy), "--bans", str(bans), "--validate"],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        sys.stderr.write(proc.stderr)
+        fail("policy", f"the operator ban file {bans} is malformed; refusing to launch")
+
+    prompt = f"Read {program} fully and start the experiment."
+    argv = [a.replace(PROMPT_TOKEN, prompt) for a in cfg["models"][args.model]]
+
+    print("=== CRRG live launch ===")
+    print(f"config     {cfg_path}")
+    print(f"repo_root  {repo_root}")
+    print(f"programme  {program}")
+    print(f"bans       {bans}")
+    print(f"model      {args.model}")
+    print(f"argv       {argv}")
+    print("")
+
+    if args.print_argv:
+        print("--print-argv: nothing was launched.")
+        return 0
+
+    print(f"preflight  {cfg['preflight']}")
+    pre = subprocess.run(cfg["preflight"], cwd=str(repo_root))
+    if pre.returncode != 0:
+        fail("preflight", f"downstream preflight exited {pre.returncode}; not launching")
+    print("preflight: OK")
+    print("")
+    print(f"launching {args.model} from {repo_root}")
+    sys.stdout.flush()
+
+    os.chdir(repo_root)
+    try:
+        os.execvp(argv[0], argv)
+    except OSError as exc:
+        fail("exec", f"could not execute {argv[0]!r}: {exc}")
+    return 0  # unreachable
+
+
+if __name__ == "__main__":
+    sys.exit(main())

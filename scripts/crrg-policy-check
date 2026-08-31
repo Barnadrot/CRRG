@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""Enforce operator policy exclusions (Spec §7).
+
+Usage:
+    crrg-policy-check --bans FILE --validate
+    crrg-policy-check --bans FILE --candidate ID
+    crrg-policy-check --bans FILE --root DECL[,DECL...]
+
+The ban file is TSV, one rule per line:
+
+    candidate-id<TAB>ID
+    declaration<TAB>Lean.Name
+    namespace<TAB>Lean.Prefix
+
+Blank lines and `#` comments are ignored. Anything else is malformed and fails:
+a policy file that silently ignores a line it does not understand is worse than
+no policy file, because the operator believes a ban is in force when it is not.
+
+What a ban is, and is not
+-------------------------
+Spec §7: exclusions are *research-policy* constraints, not mathematical facts. A
+ban never changes the root, never deletes certified graph history, and never
+certifies or refutes anything. It restricts what future research may **select**
+or **route through**. This script therefore only ever answers a yes/no question;
+it has no write path at all, which is the simplest possible way to guarantee it
+cannot mutate graph state.
+
+Why `--root` shells out
+-----------------------
+Declaration and namespace bans are dependency-closure questions, and
+`crrg-forbid` already answers them: it walks proof terms *and* types, so
+restating a goal in terms of a banned definition is caught too. Reimplementing
+that here would produce a second, subtly different notion of "depends on", and
+the weaker of the two would become the one that matters. So this delegates.
+
+Environment: `CRRG_BANS` supplies a default ban file. `CRRG_IMPORTS` and
+`CRRG_WORKDIR` are passed through to `crrg-forbid` untouched.
+"""
+
+import argparse
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+KINDS = ("candidate-id", "declaration", "namespace")
+
+
+class Malformed(Exception):
+    pass
+
+
+def parse_bans(path: Path) -> dict:
+    """Read a ban file into {kind: [values]}, or raise Malformed."""
+    if not path.is_file():
+        raise Malformed(f"no ban file at {path}")
+    out = {k: [] for k in KINDS}
+    for lineno, raw in enumerate(path.read_text().splitlines(), 1):
+        line = raw.rstrip("\n")
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) != 2:
+            raise Malformed(
+                f"{path}:{lineno}: expected exactly two tab-separated fields, "
+                f"got {len(parts)}: {line!r}"
+            )
+        kind, value = parts[0].strip(), parts[1].strip()
+        if kind not in KINDS:
+            raise Malformed(
+                f"{path}:{lineno}: unknown rule kind {kind!r}; "
+                f"expected one of {', '.join(KINDS)}"
+            )
+        if not value:
+            raise Malformed(f"{path}:{lineno}: {kind} rule has an empty value")
+        out[kind].append(value)
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(add_help=True, description=__doc__)
+    ap.add_argument("--bans", default=os.environ.get("CRRG_BANS", ""))
+    ap.add_argument("--validate", action="store_true")
+    ap.add_argument("--candidate")
+    ap.add_argument("--root")
+    args = ap.parse_args()
+
+    if not args.bans:
+        print("crrg-policy-check: --bans is required (or set CRRG_BANS)", file=sys.stderr)
+        return 2
+    modes = [bool(args.validate), args.candidate is not None, args.root is not None]
+    if sum(modes) != 1:
+        print(
+            "crrg-policy-check: give exactly one of --validate, --candidate, --root",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        bans = parse_bans(Path(args.bans))
+    except Malformed as exc:
+        print(f"POLICY FILE MALFORMED: {exc}", file=sys.stderr)
+        return 2
+
+    total = sum(len(v) for v in bans.values())
+
+    if args.validate:
+        print(f"policy: {args.bans}")
+        for kind in KINDS:
+            for value in bans[kind]:
+                print(f"  {kind}\t{value}")
+        print(f"policy OK ({total} rule(s))")
+        return 0
+
+    if args.candidate is not None:
+        if args.candidate in bans["candidate-id"]:
+            print(
+                f"POLICY VIOLATION: candidate id {args.candidate!r} is banned by "
+                f"{args.bans}.\n"
+                "  A banned candidate may not be selected as new live work. This is a\n"
+                "  research-policy exclusion (Spec §7): the graph is unchanged, nothing\n"
+                "  is certified or refuted, and prior history is untouched.",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"policy: candidate {args.candidate} is not banned ({total} rule(s) checked)")
+        return 0
+
+    # --root: delegate the closure question to crrg-forbid.
+    decls, prefixes = bans["declaration"], bans["namespace"]
+    if not decls and not prefixes:
+        # `crrg-forbid` refuses a vacuous audit -- correctly, since an audit that
+        # forbids nothing always passes and would be a dead check. With no rules
+        # to enforce there is simply nothing to ask it.
+        print(f"policy: no declaration or namespace bans in {args.bans}; nothing to enforce")
+        return 0
+
+    forbid = Path(__file__).resolve().parent / "crrg-forbid"
+    if not forbid.is_file():
+        print(f"crrg-policy-check: crrg-forbid not found at {forbid}", file=sys.stderr)
+        return 2
+
+    # Pass only the rules that exist. `crrg-forbid` accepts either list alone and
+    # refuses only a genuinely empty audit, so a namespace-only policy needs no
+    # placeholder -- and must not get one: a synthetic "forbidden" name trips its
+    # misspelled-prohibition check and would reject every root, which is a policy
+    # tool failing in the one direction that must never happen quietly.
+    cmd = [str(forbid), args.root]
+    if decls:
+        cmd += ["--forbid", ",".join(decls)]
+    if prefixes:
+        cmd += ["--forbid-prefix", ",".join(prefixes)]
+
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    sys.stdout.write(proc.stdout)
+    sys.stderr.write(proc.stderr)
+    if proc.returncode != 0:
+        print(
+            f"POLICY VIOLATION: {args.root} routes through a banned declaration or "
+            f"namespace ({args.bans}).",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"policy: {args.root} avoids all {len(decls) + len(prefixes)} banned reference(s)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
