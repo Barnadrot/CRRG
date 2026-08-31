@@ -297,6 +297,7 @@ Outcome vocabulary must remain semantic:
 ```text
 CERTIFIED
 REFUTED
+REFINED
 MALFORMED
 INVALID
 SUPERSEDED
@@ -533,6 +534,7 @@ Unlike Stage C, Stage D cannot read an `expectedOutcome` column to decide what s
 ```text
 CERTIFIED
 REFUTED
+REFINED
 MALFORMED
 INVALID
 SUPERSEDED
@@ -885,7 +887,7 @@ The live loop reports exactly the §9.3.4 vocabulary — `CERTIFIED`, `REFUTED`,
 
 Generic; each is a mechanical check the deployment's own gate must run before an agent is launched.
 
-- [ ] The external result pin is exact (commit, version, metric, and the exact claim), internally consistent, and a stale pin fails.
+- [ ] The admitted external-result pin is exact (commit, version, metric, and the exact claim) and internally consistent; floating or internally invalid pins fail. Remote freshness is handled only by the downstream import transition in §16.5.
 - [ ] The exact epoch root passes its type-link; adjacent and wrong roots fail.
 - [ ] Any lineage the project has formally refuted is not the live lineage, and that is a theorem rather than a grep.
 - [ ] A valid proof yields `CERTIFIED`; a valid `¬ P` yields `REFUTED`.
