@@ -1,7 +1,7 @@
 # Certified Research Reduction Graph (CRRG)
 ## Kernel-checked research reduction and agent credit assignment
 
-**Status:** v0.8.0 — External Review 2 complete; first live deployment is Yukon, in bounded active autoresearch.  
+**Status:** v0.8.1 — External Review 2 complete; first live deployment is Yukon, in bounded active autoresearch.  
 **Authority:** this file is the sole normative CRRG design / execution document. `CHANGELOG.md` records history and implementation findings; it does not choose targets or override this spec. Downstream notes are evidence only.  
 **Repository architecture:** CRRG is a standalone general-purpose Lean repository consumed as a pinned dependency by research projects.  
 **First integration / research test:** `Barnadrot/proximity-research`, using controlled Yukon lower-bound history before any CRRG-directed live Soundness work.  
@@ -227,6 +227,39 @@ SEALED_UNVERIFIED
 ```
 
 A sealed proposition is a type parameter, not mutable status metadata. A claimed refutation must carry `¬ P`.
+
+#### What is immutable, and what is not
+
+This distinction is normative, and getting it wrong disables a live deployment:
+
+```text
+a seal                    immutable, per candidate ID
+the registry of seals     NOT required to be immutable
+```
+
+A live deployment **must permit creation of fresh seal records for new exact candidate propositions**, because that is what a certified refinement produces: a child proposition that did not exist when the deployment was built. An existing candidate ID and its row may never be rewritten to mean a different proposition — a changed proposition gets a **new ID**, and the old row stays forever.
+
+A deployment that hashes its whole seal registry as a frozen governance file has made its own sanctioned next step indistinguishable from tampering. The researcher then holds a certified `REFINED` it is not permitted to act on, and the only ways forward are to violate governance or to discard a real result. Both are worse than the problem. Append is live state; rewrite is not; enforce the difference in the registration tool and in the audit trail, not by freezing the file.
+
+`scripts/crrg-register-candidate` is the generic implementation: fresh ID required, the declaration must elaborate, the hash comes from `crrg-seal` rather than a second implementation, the append is atomic, the resulting registry is re-verified before it is installed, and every rejection leaves the registry byte-identical.
+
+#### The live refinement lifecycle
+
+```text
+DRAFT exact child
+        ↓
+certified Edge / Split
+        ↓
+fresh durable seal registration for every new child
+        ↓
+SEALED_UNVERIFIED child
+        ↓
+activate certified refinement on the Frontier
+        ↓
+child is an OPEN live task
+```
+
+A candidate **may** be sealed before its `Edge` or `Split` is discovered — predeclaring a target is legitimate and often better. It **must** be sealed before it becomes a live frontier leaf. Every branch of a `Split` is a separate child and needs its own seal; activating a split with one branch sealed and one not is rejected.
 
 ### 5.2 No hidden composition debt
 
@@ -760,6 +793,35 @@ CRRG is model-agnostic. A deployment must not hardcode a vendor CLI into its har
 
 No live deployment is required to decide general semantic "easier than". It is not solved here and must not be faked.
 
+#### Adjudication is not activation
+
+`REFINED` is a statement about what was **proved**, not about what has **happened to the graph**:
+
+```text
+REFINED = the gate certified an Edge, or an exhaustive Split, sufficient for
+          the current live leaf.
+
+It does NOT by itself assert that the Frontier has already moved.
+```
+
+Activation is a separate, ordered transition:
+
+```text
+REFINED adjudicated
+    → register a fresh durable seal for every new child (§5.1)
+    → apply the frontier refinement
+    → gate the new frontier
+```
+
+Each step can fail for its own reasons, and they are different reasons. A deployment must therefore report the two axes separately:
+
+```text
+research_outcome  = REFINED
+transition_status = IMPLEMENTATION_BLOCKED
+```
+
+**No new progress or prize outcome is introduced for this**, and none is needed. What is forbidden is downgrading a certified `REFINED` to `UNCHANGED` because the activation machinery failed: that corrupts the outcome vocabulary, misattributes a harness defect to the researcher, and destroys the evidence that the mathematics was sound. If activation is blocked, the research outcome stands and the blockage is recorded as an implementation matter (§16.6).
+
 ### 16.8 Reporting
 
 The live loop reports exactly the §9.3.4 vocabulary — `CERTIFIED`, `REFUTED`, `REFINED`, `MALFORMED`, `INVALID`, `SUPERSEDED`, `UNCHANGED`, `TOOLING_FAILURE` — one line per live task, and no aggregate progress magnitude (§5.6, §14.2 item 7). Epoch history is retained; a completed epoch is never deleted to make the current one look cleaner.
@@ -777,6 +839,15 @@ Generic; each is a mechanical check the deployment's own gate must run before an
 - [ ] A valid `Edge` refinement and a valid `Split` refinement both yield `REFINED`.
 - [ ] A hole-backed refinement is rejected by the axiom audit.
 - [ ] An unrelated or easier proposed child is rejected.
+
+Adjudicating `REFINED` is not enough, and a suite that stops there will certify a deployment whose researcher cannot act on its own results. The activation path must be exercised end to end, on a child that did **not** exist when the deployment was built:
+
+- [ ] A genuinely fresh `Edge` child can be registered under a new durable seal and activated as a live `OPEN` leaf.
+- [ ] Every fresh branch of a `Split` can be independently sealed and the full split activated.
+- [ ] Existing candidate seal IDs cannot be mutated in place.
+- [ ] A failed registration cannot partially mutate the registry or the frontier.
+- [ ] The post-activation full gate verifies the new frontier, the root, sibling preservation, the task manifest, and all seals.
+- [ ] A new live leaf that is not sealed is rejected; a manifest naming a nonexistent seal is rejected; a split with one branch sealed and one unsealed is rejected.
 - [ ] An open root cannot be changed; a completed root can be banked.
 - [ ] An equal or weaker next target is rejected; a strictly stronger one inside the certified ceiling is accepted.
 - [ ] A prior epoch remains available as immutable history.

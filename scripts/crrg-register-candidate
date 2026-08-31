@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+# Register a NEW sealed candidate in a seal registry.
+#
+# Usage:
+#   crrg-register-candidate --id <ID> --decl <Declaration> [options]
+#
+# Options:
+#   --registry <file>      registry to append to (default: $CRRG_SEALS)
+#   --expected-theorem <n> name the promoting theorem must be given (default: -)
+#   --target-id <id>       graph node this candidate discharges (default: the ID)
+#   --source-ids <a,b>     graph nodes it consumes (default: -)
+#   --commit <sha>         provenance commit (default: short HEAD of CRRG_WORKDIR)
+#   --created <iso8601>    creation timestamp (default: now, UTC)
+#   --dry-run              compute and validate; write nothing
+#
+# Environment: as `crrg-seal` -- CRRG_IMPORTS, CRRG_WORKDIR, CRRG_SEAL_SCOPE,
+# CRRG_SEALS. This script does not reimplement any of it.
+#
+# Why this exists (Spec §5.1)
+# ---------------------------
+# A seal is immutable **per candidate ID**. The registry that holds seals is
+# not, and must not be: a live deployment discovers new exact child
+# propositions while it runs -- that is what a certified refinement *is* -- and
+# every such child has to be sealed before it can become a live frontier leaf.
+# A deployment that hashes the whole registry as an immutable governance file
+# makes its own sanctioned next step indistinguishable from tampering, and the
+# researcher is left holding a certified `REFINED` it is not permitted to
+# activate.
+#
+# So: appending is normal live-state operation, rewriting is not, and the
+# difference is enforced *here* rather than by freezing the file.
+#
+#   fresh ID                      required
+#   declaration must elaborate    required -- checked by sealing it
+#   existing rows                 never touched
+#   same ID, different decl/hash  rejected
+#   registry re-verified          before the append is accepted
+#   any failure                   registry left byte-identical
+#
+# The semantic hash is NOT computed here. It comes from `crrg-seal`, so there is
+# exactly one implementation of what a seal means.
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CRRG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+SEAL="$SCRIPT_DIR/crrg-seal"
+
+ID=""; DECL=""; REGISTRY="${CRRG_SEALS:-}"
+EXPECTED_THM="-"; TARGET_ID=""; SOURCE_IDS="-"; COMMIT=""; CREATED=""; DRY=0
+
+usage() { sed -n '3,22p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --id) shift; ID="${1:-}" ;;
+    --decl) shift; DECL="${1:-}" ;;
+    --registry) shift; REGISTRY="${1:-}" ;;
+    --expected-theorem) shift; EXPECTED_THM="${1:-}" ;;
+    --target-id) shift; TARGET_ID="${1:-}" ;;
+    --source-ids) shift; SOURCE_IDS="${1:-}" ;;
+    --commit) shift; COMMIT="${1:-}" ;;
+    --created) shift; CREATED="${1:-}" ;;
+    --dry-run) DRY=1 ;;
+    -h|--help) usage ;;
+    *) echo "crrg-register-candidate: unknown option $1" >&2; usage ;;
+  esac
+  shift
+done
+
+fail() { echo "REGISTRATION REJECTED [$1]: $2" >&2; exit 1; }
+
+[ -n "$ID" ]   || fail usage "--id is required"
+[ -n "$DECL" ] || fail usage "--decl is required"
+[ -n "$REGISTRY" ] || fail usage "--registry is required (or set CRRG_SEALS)"
+[ -f "$REGISTRY" ] || fail usage "no registry at $REGISTRY"
+[ -x "$SEAL" ] || fail tooling "crrg-seal not found at $SEAL"
+
+# A candidate ID is an identifier, not a sentence: it lands in a TSV column and
+# is quoted in commit messages and ledgers.
+case "$ID" in
+  *[!A-Za-z0-9_.-]*|"") fail usage "candidate id '$ID' must match [A-Za-z0-9_.-]+" ;;
+esac
+
+: "${TARGET_ID:=$ID}"
+: "${CREATED:=$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+if [ -z "$COMMIT" ]; then
+  COMMIT="$(git -C "${CRRG_WORKDIR:-$CRRG_ROOT}" rev-parse --short HEAD 2>/dev/null || echo "-")"
+fi
+
+# Take a fingerprint up front. Every exit path below re-checks it, so "the
+# registry is byte-identical on failure" is verified rather than asserted.
+BEFORE="$(sha256sum "$REGISTRY" | cut -d' ' -f1)"
+assert_untouched() {
+  local now; now="$(sha256sum "$REGISTRY" | cut -d' ' -f1)"
+  [ "$now" = "$BEFORE" ] && return 0
+  echo "crrg-register-candidate: INTERNAL ERROR — the registry changed on a failing path" >&2
+  return 1
+}
+bail() { assert_untouched; fail "$1" "$2"; }
+
+echo "=== CRRG candidate registration ==="
+echo "registry   $REGISTRY"
+echo "id         $ID"
+echo "decl       $DECL"
+# The apostrophe matters: inside "${var:-word}" an unpaired ' opens a quote and
+# bash then mis-parses everything after it. Spelled without one.
+echo "scope      ${CRRG_SEAL_SCOPE:-<default scope: the root namespace of the target>}"
+echo ""
+
+# --- 1. The ID must be fresh ------------------------------------------------
+# Checked before anything expensive, and checked on the raw file so a commented
+# row cannot hide a live one.
+if awk -F'\t' -v id="$ID" '$1 !~ /^#/ && $1 == id { found = 1 } END { exit !found }' "$REGISTRY"; then
+  existing_decl="$(awk -F'\t' -v id="$ID" '$1 !~ /^#/ && $1 == id { print $2; exit }' "$REGISTRY")"
+  existing_hash="$(awk -F'\t' -v id="$ID" '$1 !~ /^#/ && $1 == id { print $3; exit }' "$REGISTRY")"
+  echo "  id $ID already registered:" >&2
+  echo "    decl $existing_decl" >&2
+  echo "    seal $existing_hash" >&2
+  bail duplicate-id "a candidate id is never reused.
+
+           A seal is immutable per ID (Spec §5.1). If this proposition is the
+           same one, it is already registered and there is nothing to do. If it
+           is a DIFFERENT proposition, it needs a NEW id -- rewriting this row
+           would silently retarget a sealed candidate, which is the one thing
+           the registry exists to prevent."
+fi
+echo "  id is fresh: OK"
+
+# --- 2. The declaration must elaborate, and sealing is how we find out ------
+# No separate "does it exist" probe: `crrg-seal` has to elaborate the
+# declaration and walk its dependency closure to produce a hash at all, so a
+# declaration that does not exist, does not compile, or is not in scope fails
+# here with the elaborator's own message.
+SEAL_LOG="$(mktemp)"
+trap 'rm -f "$SEAL_LOG"' EXIT
+if ! "$SEAL" "$DECL" >"$SEAL_LOG" 2>&1; then
+  echo "  the declaration could not be sealed:" >&2
+  tail -20 "$SEAL_LOG" | sed 's/^/    /' >&2
+  bail decl "'$DECL' does not elaborate, does not exist, or is out of scope.
+
+           Nothing was appended."
+fi
+HASH="$(awk '/^  [0-9a-f]{64}$/ { print $1; exit }' "$SEAL_LOG")"
+[ ${#HASH} -eq 64 ] || bail tooling "crrg-seal produced no hash for '$DECL'"
+DENOTES_PROP="$(awk -F': *' '/^Denotes a Prop:/ { print $2; exit }' "$SEAL_LOG")"
+echo "  sealed: $HASH"
+[ "${DENOTES_PROP:-}" = "true" ] && echo "  denotes a Prop: yes"
+
+# --- 3. The same proposition must not already be registered under another id -
+# Not fatal in principle, but silently registering the same proposition twice
+# gives the frontier two ids for one obligation, and every later report has to
+# guess which is live.
+dup_hash_id="$(awk -F'\t' -v h="$HASH" '$1 !~ /^#/ && $3 == h { print $1; exit }' "$REGISTRY")"
+if [ -n "$dup_hash_id" ]; then
+  bail duplicate-proposition "this exact proposition is already registered as '$dup_hash_id'.
+
+           Two ids for one obligation makes the live task list ambiguous. Use
+           '$dup_hash_id', or change the proposition."
+fi
+
+ROW="$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' \
+  "$ID" "$DECL" "$HASH" "$COMMIT" "$CREATED" "$EXPECTED_THM" "$TARGET_ID" "$SOURCE_IDS")"
+
+if [ "$DRY" -eq 1 ]; then
+  echo ""
+  echo "  --dry-run; would append:"
+  printf '    %s\n' "$ROW"
+  assert_untouched || exit 1
+  echo ""
+  echo "=== dry run OK — registry untouched ==="
+  exit 0
+fi
+
+# --- 4. Append atomically ---------------------------------------------------
+# Build the candidate registry beside the real one, verify THAT, and only then
+# rename over it. A half-written registry is never observable, and a registry
+# that would not verify is never installed.
+TMP="$(mktemp "${REGISTRY}.new.XXXXXX")"
+cleanup_tmp() { rm -f "$TMP"; }
+trap 'cleanup_tmp; rm -f "$SEAL_LOG"' EXIT
+
+cat "$REGISTRY" > "$TMP" || bail io "could not copy the registry"
+# A registry whose last line lacks a newline would otherwise fuse two rows.
+[ -s "$TMP" ] && [ "$(tail -c1 "$TMP" | wc -l)" -eq 0 ] && printf '\n' >> "$TMP"
+printf '%s\n' "$ROW" >> "$TMP" || bail io "could not append the row"
+
+# Existing rows must be untouched. Comparing the prefix is stronger than
+# trusting the append: it catches an editor, a locale, or a stray CR.
+if ! head -n "$(wc -l < "$REGISTRY")" "$TMP" | cmp -s - "$REGISTRY"; then
+  bail integrity "appending would have altered an existing row. Nothing written."
+fi
+
+# --- 5. The resulting registry must verify, in full -------------------------
+VERIFY_LOG="$(mktemp)"
+trap 'cleanup_tmp; rm -f "$SEAL_LOG" "$VERIFY_LOG"' EXIT
+if ! "$SEAL" --verify-registry "$TMP" >"$VERIFY_LOG" 2>&1; then
+  echo "  the resulting registry does not verify:" >&2
+  grep -E 'BROKEN|MISMATCH|FAILED' "$VERIFY_LOG" | head -8 | sed 's/^/    /' >&2
+  bail verify "refusing to install a registry that does not verify. Nothing written."
+fi
+
+mv "$TMP" "$REGISTRY" || fail io "could not install the registry"
+trap 'rm -f "$SEAL_LOG" "$VERIFY_LOG"' EXIT
+
+echo "  registry verifies with the new row: $(grep -c '  OK' "$VERIFY_LOG") seals"
+echo ""
+echo "appended:"
+printf '  %s\n' "$ROW"
+echo ""
+echo "=== registered $ID ==="

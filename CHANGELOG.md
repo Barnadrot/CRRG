@@ -196,6 +196,63 @@ the staged implementation plan (§15). Do not reconcile the two.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `SPEC-10` / `CHG-30` — v0.8.1: a seal is immutable, its registry is not
+
+Found by a live deployment, in the worst possible way: the researcher produced a
+certified `REFINED` and then could not act on it. To make the new child a live
+leaf it had to be sealed; sealing meant appending to the seal registry; and the
+registry was hashed whole as a frozen governance file. The one sanctioned next
+step was indistinguishable from tampering, so the only routes forward were to
+violate governance or to discard a real mathematical result. Both are worse than
+the problem.
+
+**Spec §5.1** now states the distinction that was missing. A seal is immutable
+**per candidate ID**; the registry holding seals is **not required to be
+immutable**, and a live deployment MUST permit creating fresh seal records for
+new exact propositions — because that is exactly what a certified refinement
+produces. An existing ID is never rewritten to mean something else; a changed
+proposition gets a new ID and the old row stays. Append is live state, rewrite is
+not, and the difference belongs in the registration tool and the audit trail
+rather than in a frozen hash. §5.1 also gains the live refinement lifecycle
+(draft child → certified Edge/Split → fresh seal per child → SEALED_UNVERIFIED →
+activate → OPEN live task) and the rule that a candidate MAY be sealed before its
+Edge/Split is discovered but MUST be sealed before becoming a live leaf.
+
+**Spec §16.7** separates two things a single verdict was being asked to carry.
+`REFINED` says the gate certified an `Edge` or exhaustive `Split` sufficient for
+the current leaf; it does **not** assert the frontier has moved. Activation is
+its own ordered transition (register seals → apply refinement → gate the new
+frontier), each step failing for its own reasons, so a deployment reports two
+axes — `research_outcome = REFINED`, `transition_status = IMPLEMENTATION_BLOCKED`.
+No new progress outcome is introduced. What is forbidden is downgrading a
+certified `REFINED` to `UNCHANGED` because the activation machinery failed:
+that corrupts the vocabulary, blames the researcher for a harness defect, and
+destroys the evidence that the mathematics was sound.
+
+**Spec §17** gains six acceptance criteria. The previous set stopped at
+"Edge/Split yields REFINED", which is why a 52-check suite passed against a
+deployment whose researcher could not activate a refinement. Activation must now
+be exercised end to end on a child that did not exist when the deployment was
+built, including per-branch sealing of a `Split` and the four rejection cases.
+
+**Implementation.** `scripts/crrg-register-candidate` is the generic tool, not a
+per-deployment script: fresh ID required, the declaration must elaborate (checked
+by sealing it, so there is no separate existence probe to drift), the hash comes
+from `crrg-seal` rather than a second implementation of what a seal means, the
+append is atomic via a verified temporary, the resulting registry must pass
+`--verify-registry` before it is installed, and every rejection path re-checks
+that the registry is byte-identical rather than asserting it. It also refuses two
+IDs for one proposition, which would make a live task list ambiguous.
+
+Seventeen new self-tests in `scripts/crrg-selftest` cover the happy path, six
+rejection paths, `--dry-run`, that a second append does not disturb the first
+row, and that a registry which would not verify is never installed even when the
+row being added is itself good.
+
+One bug worth recording because it is invisible until it fires: an apostrophe
+inside `"${VAR:-default}"` opens a shell quote, and bash then mis-parses the rest
+of the file. It cost a syntax error thirty lines from its cause.
+
 #### `SPEC-09` / `CHG-29` — v0.8.0: live deployment mode, and the leaf-preservation theorems it needed
 
 Two changes, and the second was found by the first.

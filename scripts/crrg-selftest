@@ -211,6 +211,99 @@ expect reject "registry verification FAILED" \
   env CRRG_IMPORTS="$SEAL_IMPORTS" "$SCRIPT_DIR/crrg-seal" \
      --verify-registry "$TMPDIR_SELFTEST/bad.tsv"
 
+
+echo ""
+echo "crrg-register-candidate:"
+
+# A seal is immutable per candidate ID; the REGISTRY that holds seals is not,
+# and must not be. A live deployment discovers new exact child propositions
+# while it runs -- that is what a certified refinement is -- and each one must
+# be sealed before it can become a live leaf. These checks pin the two halves:
+# appending is a normal operation, and every way of corrupting an existing row
+# is refused with the registry left byte-identical.
+
+REG="$TMPDIR_SELFTEST/live.tsv"
+printf '# id\tdecl\thash\tcommit\tcreated\texpected\ttarget\tsources\n' > "$REG"
+
+reg() {
+  env CRRG_IMPORTS="$SEAL_IMPORTS" "$SCRIPT_DIR/crrg-register-candidate" \
+    --registry "$REG" "$@"
+}
+reg_fingerprint() { sha256sum "$REG" | cut -d' ' -f1; }
+
+expect ok "registered R001" \
+  "registers a fresh candidate and re-verifies the registry" \
+  reg --id R001 --decl SealFixture.Strong --expected-theorem Downstream.r001
+
+# Everything below must leave the registry EXACTLY as it is now. Captured once
+# and re-checked after each rejection, because "nothing was written" is the
+# claim most worth testing and the easiest to get wrong on an error path.
+REG_BEFORE="$(reg_fingerprint)"
+untouched() {
+  if [ "$(reg_fingerprint)" = "$REG_BEFORE" ]; then
+    check true "  ...and left the registry byte-identical: $1"
+  else
+    check false "  ...but MUTATED the registry: $1"
+  fi
+}
+
+expect reject "duplicate-id" \
+  "refuses to reuse a candidate id, even for the same declaration" \
+  reg --id R001 --decl SealFixture.Strong
+untouched "duplicate id, same declaration"
+
+expect reject "duplicate-id" \
+  "refuses to retarget an existing id at a different proposition" \
+  reg --id R001 --decl SealFixture.Weakened
+untouched "duplicate id, different declaration"
+
+expect reject "duplicate-proposition" \
+  "refuses two ids for one proposition, which would make the task list ambiguous" \
+  reg --id R002 --decl SealFixture.Strong
+untouched "same proposition under a new id"
+
+expect reject "does not elaborate" \
+  "refuses a declaration that does not exist" \
+  reg --id R003 --decl SealFixture.NoSuchTarget
+untouched "nonexistent declaration"
+
+expect reject "must match" \
+  "refuses a candidate id that is not an identifier" \
+  reg --id "R 004" --decl SealFixture.Weakened
+untouched "malformed candidate id"
+
+expect ok "dry run OK" \
+  "--dry-run computes the row without writing it" \
+  reg --id R005 --decl SealFixture.Weakened --dry-run
+untouched "--dry-run"
+
+expect ok "registered R006" \
+  "a second legitimate candidate appends" \
+  reg --id R006 --decl SealFixture.Weakened
+
+if [ "$(grep -c '^R001' "$REG")" = 1 ] && grep -q "^R001.*$H_STRONG" "$REG"; then
+  check true "  ...without disturbing the row that was already there"
+else
+  check false "  ...without disturbing the row that was already there"
+fi
+
+# A registry that would not verify must never be installed, even when the row
+# being added is itself perfectly good: the failure is pre-existing, and
+# appending to a broken registry would launder it.
+BROKEN="$TMPDIR_SELFTEST/broken.tsv"
+printf '%s\t%s\t%s\tHEAD\t2026-01-01T00:00:00Z\tthm\tN1\tN0\n' \
+  "R900" "SealFixture.Strong" "$H_WEAK" > "$BROKEN"
+BROKEN_BEFORE="$(sha256sum "$BROKEN" | cut -d' ' -f1)"
+expect reject "does not verify" \
+  "refuses to install a registry that does not verify, even with a good new row" \
+  env CRRG_IMPORTS="$SEAL_IMPORTS" "$SCRIPT_DIR/crrg-register-candidate" \
+     --registry "$BROKEN" --id R901 --decl SealFixture.Composed
+if [ "$(sha256sum "$BROKEN" | cut -d' ' -f1)" = "$BROKEN_BEFORE" ]; then
+  check true "  ...and left that registry byte-identical too"
+else
+  check false "  ...but MUTATED that registry"
+fi
+
 echo ""
 if [ "$fail" -ne 0 ]; then
   echo "=== CRRG gate self-tests FAILED ($fail of $((pass + fail))) ==="
