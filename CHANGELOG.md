@@ -196,6 +196,48 @@ the staged implementation plan (§15). Do not reconcile the two.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `SPEC-11` / `CHG-32` — v0.8.2 downstream: the external import became complete
+
+The defect this closes was not subtle once it bit. `crrg-upstream-sync`
+classified an upstream result and wrote the *textual* pin, then left the Lean
+side "for an implementation agent". Between those two halves the gate failed and
+the researcher could not work — so every upstream movement stalled the live lane
+until a human intervened, and upstream moved three times in one day. A partial
+import is not a smaller change than a complete one; it is a broken one.
+
+Two things were wrong, and only one of them was the tool.
+
+**The Lean bank was a score-specific constant.** `epoch1.bank := publicFloor6760`
+meant every external improvement was a *code* change needing a new declaration
+and a new theorem name. The one-time refactor derives the bank from the pin
+(`currentExternalTarget`), so there is exactly one place a score lives and the
+two cannot disagree — the inconsistency window closes by construction rather
+than by a check that reports it. Historical floors stay declared, because "the
+bank moved" is a claim about two states and keeping only the newer one makes it
+uncheckable.
+
+**The version gate asked a human to certify something mechanical.** A verifier
+bump now imports automatically once the statement check passes — upstream's
+`IRSProfile.lean` and `TargetLower.lean` byte-identical to the deployment's
+reference copies. That check is what establishes safety; the flag on top of it
+did no epistemic work and stalled the loop. What remains fatal, correctly and
+rarely, is the *statement* moving: that is not admitted, the previously admitted
+pin stays authoritative, and research continues against it. Network failure and
+an incompatible statement both log and continue rather than halting a session.
+
+The import is one transaction — pin, Lean, ceiling, seals, governance, state,
+`crrg-live-gate`, `yukon_verify.sh` — and any failure restores every touched
+file byte-identically. Verified against a deterministic local fixture rather
+than the real upstream, which moved twice during this work.
+
+One design consequence worth recording: a blanket append-only rule on the seal
+registry made every *sanctioned* re-seal look like tampering. §16.6 already says
+transition-managed state must stay mutable through its bounded path, so the gate
+now distinguishes pointer rows (pin, ceiling, epoch, active-epoch — a governed
+transition may move their hash) from candidate rows (append-only forever, id and
+declaration pinned). Conflating the two is the same mistake that froze the whole
+registry and left a certified `REFINED` unactivatable.
+
 #### `CHG-31` — v0.8.2: operator bans, generic three-model launch
 
 Implements §7's operator exclusions and §16.6.1's live launch. No Lean changed;
