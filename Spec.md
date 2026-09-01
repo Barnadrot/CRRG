@@ -1,7 +1,7 @@
 # Certified Research Reduction Graph (CRRG)
 ## Kernel-checked research reduction and agent credit assignment
 
-**Status:** v0.8.2 — External Review 2 complete; first live deployment is Yukon, in bounded active autoresearch.  
+**Status:** v0.8.3 — External Review 2 complete; first live deployment is Yukon, in bounded active autoresearch.  
 **Authority:** this file is the sole normative CRRG design / execution document. `CHANGELOG.md` records history and implementation findings; it does not choose targets or override this spec. Downstream notes are evidence only.  
 **Repository architecture:** CRRG is a standalone general-purpose Lean repository consumed as a pinned dependency by research projects.  
 **First integration / research test:** `Barnadrot/proximity-research`, using controlled Yukon lower-bound history before any CRRG-directed live Soundness work.  
@@ -604,6 +604,40 @@ Do not rewrite downstream research history into a new objective. Do not choose a
 
 A tooling defect is “fixed” only when a regression/self-test demonstrates the bad behavior and the corrected behavior, or an equivalent positive/negative test pins the property.
 
+### 11.1 Validation cadence and runtime budget
+
+Soundness and iteration speed are both requirements. A deployment whose ordinary validation cycle takes hours is not usable as a live research system, even if every individual check is sensible.
+
+Validation has three distinct tiers:
+
+```text
+PRODUCTION GATE
+  verifies the invariants required to accept the current live research transition
+
+FOCUSED REGRESSION
+  exercises the property changed by an implementation edit, including the relevant
+  positive / negative path, using the same underlying check implementation
+
+FULL ACCEPTANCE SUITE
+  exercises the complete deployment contract in §17
+```
+
+These tiers must not be collapsed into “rerun the complete deployment for every assertion.” A self-test must not invoke the entire production gate merely to test one local condition when the same production check can be exercised directly or through a focused gate entry point. Focused test paths may factor or parameterize production checks; they must not duplicate them into a weaker second implementation.
+
+During implementation, the required loop is the affected focused regression(s) plus the production gate. The full acceptance suite is required once on the final candidate before push/review, not after every intermediate edit.
+
+On the designated deployment machine, with the toolchain and dependencies already materialized:
+
+```text
+ordinary implementation validation   MUST complete within 15 minutes
+full downstream acceptance suite      MUST complete within 15 minutes
+production live gate                  SHOULD remain within about 5 minutes
+```
+
+First-time toolchain/package download or equivalent cold bootstrap is outside this iterative budget; bootstrap correctness remains testable separately when that boundary changes.
+
+Exceeding the 15-minute budget is an implementation defect and blocks further growth of the acceptance suite until the redundant work is removed. The remedy is to isolate tests, batch checks, reuse already-built artifacts when sound, and remove repeated whole-gate execution — **not** to delete proof/seal/axiom/forbid requirements or convert a required verification into an unauthenticated stale cache.
+
 `CHANGELOG.md` may continue recording detailed implementation discoveries. It must not become a second planning document.
 
 ---
@@ -885,7 +919,9 @@ The live loop reports exactly the §9.3.4 vocabulary — `CERTIFIED`, `REFUTED`,
 
 ## 17. Acceptance criteria for a live deployment
 
-Generic; each is a mechanical check the deployment's own gate must run before an agent is launched.
+Generic acceptance properties for a live deployment. Every item below must be exercised mechanically, with a positive / negative control where applicable. These are acceptance-suite obligations; they are **not** a requirement that every item execute inside the production live gate or be rerun after every implementation edit.
+
+The production gate verifies the invariants required for the current live transition. Focused regressions verify the mechanism changed by an implementation edit. The full acceptance suite verifies the complete deployment before final push/review. All three obey the validation architecture and runtime budget in §11.1; testing the whole deployment repeatedly in order to assert one local condition is non-conforming.
 
 - [ ] The admitted external-result pin is exact (commit, version, metric, and the exact claim) and internally consistent; floating or internally invalid pins fail. Remote freshness is handled only by the downstream import transition in §16.5.
 - [ ] The exact epoch root passes its type-link; adjacent and wrong roots fail.
