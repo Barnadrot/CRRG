@@ -200,9 +200,9 @@ work lands.
 
 §10 has always asked a deployment to classify its active state as `OVERREDUCED`,
 `RIGHT-DEPTH` or `UNDERREDUCED` before moving the graph. Nothing enforced that
-the classification was ever made, and the first live deployment ran nineteen
-consecutive `REFINED` iterations, each activating a deeper child — which is
-precisely the pattern §10 exists to interrupt.
+the classification was ever made, and the first live deployment reached
+generation 9 within nineteen iterations, with repeated certified refinements on
+the same lineage — which is precisely the pattern §10 exists to interrupt.
 
 `scripts/crrg-depth-check` validates the record and **nothing else**. It does not
 judge whether the classification is correct: deciding that a leaf is genuinely
