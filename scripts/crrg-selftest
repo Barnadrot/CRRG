@@ -445,6 +445,68 @@ else
   check true "adding a ban cannot mutate graph state (policy tool has no write path)"
 fi
 
+
+echo ""
+echo "crrg-depth-check (reduction depth, Spec §10):"
+
+# §10 asks a deployment to classify its active state before it moves the graph.
+# This validates that the classification was MADE AND WRITTEN DOWN; it does not
+# judge whether it is correct, because that is a research judgement about
+# mathematics and a script pretending to make it would be inventing an authority
+# CRRG does not have. The required fields are the ones that cannot be filled in
+# without having actually considered the question.
+DC="$TMPDIR_SELFTEST/depth"
+mkdir -p "$DC"
+dcheck() { "$SCRIPT_DIR/crrg-depth-check" --file "$1"; }
+
+printf 'REFINED\ndepth: OVERREDUCED\nancestor: L005\nlost-information: the residual-mass bound the child dropped\nfailed-mechanism: polynomial alignment below minimum distance\n' > "$DC/over.txt"
+expect ok "depth record OK (OVERREDUCED)" \
+  "accepts a complete OVERREDUCED record" dcheck "$DC/over.txt"
+
+printf 'depth: OVERREDUCED\nlost-information: x\nfailed-mechanism: y\n' > "$DC/over-noanc.txt"
+expect reject "missing: ancestor" \
+  "rejects OVERREDUCED with no ancestor -- stepping up to nowhere is not a decision" \
+  dcheck "$DC/over-noanc.txt"
+
+printf 'depth: OVERREDUCED\nancestor: L005\nfailed-mechanism: y\n' > "$DC/over-nolost.txt"
+expect reject "missing: lost-information" \
+  "rejects OVERREDUCED with no lost-information" dcheck "$DC/over-nolost.txt"
+
+printf 'depth: RIGHT-DEPTH\nmechanism: BCH bound at arity two\nfailure-class: no averaging argument in the corpus\n' > "$DC/right.txt"
+expect ok "depth record OK (RIGHT-DEPTH)" \
+  "accepts a complete RIGHT-DEPTH record" dcheck "$DC/right.txt"
+
+printf 'depth: RIGHT-DEPTH\nfailure-class: y\n' > "$DC/right-nomech.txt"
+expect reject "missing: mechanism" \
+  "rejects RIGHT-DEPTH with no mechanism" dcheck "$DC/right-nomech.txt"
+
+printf 'depth: UNDERREDUCED\nrefinement: Downstream.Attempts.E17_refinement\n' > "$DC/under.txt"
+expect ok "depth record OK (UNDERREDUCED)" \
+  "accepts a complete UNDERREDUCED record" dcheck "$DC/under.txt"
+
+printf 'depth: UNDERREDUCED\n' > "$DC/under-noref.txt"
+expect reject "missing: refinement" \
+  "rejects UNDERREDUCED with no refinement declaration" dcheck "$DC/under-noref.txt"
+
+printf 'depth: SHALLOW\nrefinement: x\n' > "$DC/badclass.txt"
+expect reject "unknown depth class" \
+  "rejects a depth class §10 does not define" dcheck "$DC/badclass.txt"
+
+# A field present but blank is the shape of the judgement without the judgement,
+# and is the easiest way to satisfy a naive presence check while deciding
+# nothing.
+printf 'depth: UNDERREDUCED\nrefinement:    \n' > "$DC/blank.txt"
+expect reject "empty field(s)" \
+  "rejects a required field that is present but blank" dcheck "$DC/blank.txt"
+
+printf 'REFINED\nreason: it works\nstrategic-reason: it is better\n' > "$DC/nodepth.txt"
+expect reject "no \`depth:\` line" \
+  "rejects an outcome carrying no classification at all" dcheck "$DC/nodepth.txt"
+
+printf 'depth: UNDERREDUCED\ndepth: RIGHT-DEPTH\nrefinement: x\nmechanism: y\nfailure-class: z\n' > "$DC/two.txt"
+expect reject "exactly one classification is required" \
+  "rejects two classifications -- two is no classification" dcheck "$DC/two.txt"
+
 echo ""
 if [ "$fail" -ne 0 ]; then
   echo "=== CRRG gate self-tests FAILED ($fail of $((pass + fail))) ==="

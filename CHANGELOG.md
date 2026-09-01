@@ -196,6 +196,29 @@ the staged implementation plan (§15). Do not reconcile the two.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `CHG-33` — `crrg-depth-check`: §10 becomes a step rather than an aspiration
+
+§10 has always asked a deployment to classify its active state as `OVERREDUCED`,
+`RIGHT-DEPTH` or `UNDERREDUCED` before moving the graph. Nothing enforced that
+the classification was ever made, and the first live deployment ran nineteen
+consecutive `REFINED` iterations, each activating a deeper child — which is
+precisely the pattern §10 exists to interrupt.
+
+`scripts/crrg-depth-check` validates the record and **nothing else**. It does not
+judge whether the classification is correct: deciding that a leaf is genuinely
+overreduced is a research judgement about mathematics, and a script pretending to
+make it would invent an authority CRRG does not have — the same error as scoring
+how much progress a refinement represents. What it enforces is that the judgement
+was *made and written down*, via the fields that cannot be filled in without
+having considered the question: the ancestor being returned to, the information
+the child lost, the mechanism that failed.
+
+Two rejections are worth naming. A required field present but **blank** is the
+shape of the judgement without the judgement, so blanks fail. **Two** `depth:`
+lines fail as well, because two classifications is no classification.
+
+Eleven self-tests, one per accept/reject path.
+
 #### `SPEC-11` / `CHG-32` — v0.8.2 downstream: the external import became complete
 
 The defect this closes was not subtle once it bit. `crrg-upstream-sync`
