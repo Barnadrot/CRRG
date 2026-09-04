@@ -1,7 +1,7 @@
 # Certified Research Reduction Graph (CRRG)
 ## Kernel-checked research reduction and agent credit assignment
 
-**Status:** v0.9.0-draft — the v0.9 orchestration layer is specified (§18–§27), implementation pending Phases B–F (§18.3); External Review 2 complete; first live deployment is Yukon, in bounded active autoresearch.  
+**Status:** v0.9.0-rc — the v0.9 orchestration layer (§18–§27) is implemented and audited (Phases A–F complete; §27 all green); review candidate, pending owner review. External Review 2 complete; first live deployment is Yukon, in bounded active autoresearch (pre-v0.9 semantics until the integration merges).  
 **Authority:** this file is the sole normative CRRG design / execution document. `CHANGELOG.md` records history and implementation findings; it does not choose targets or override this spec. Downstream notes are evidence only.  
 **Repository architecture:** CRRG is a standalone general-purpose Lean repository consumed as a pinned dependency by research projects.  
 **First integration / research test:** `Barnadrot/proximity-research`, using controlled Yukon lower-bound history before any CRRG-directed live Soundness work.  
@@ -21,13 +21,15 @@ The central rule is:
 
 CRRG must never manufacture a synthetic global score such as weighted theorem counts, graph depth, leaf count, or a hand-chosen exchange rate between unrelated local quantities.
 
-Trusted progress channels are only:
+Certified research-state channels are only:
 
 1. actual project reward movement, produced by the project’s existing gate;
 2. exact `OPEN → CLOSED` transition of an assigned leaf;
 3. a certified refinement / split that preserves root closure;
 4. an exact quantitative improvement inside one formally monotone family;
 5. a sealed candidate becoming certified, which is formalization progress but **not** prize progress.
+
+Channel 1 is project reward (the terminal objective); channels 2–5 are CRRG certified state movement. Research evidence is not a channel and never becomes one by accumulation — the explicit three-way distinction is §19.3's.
 
 ---
 
@@ -1074,7 +1076,7 @@ RESEARCH EVIDENCE
   not certified graph movement unless an admitted transition consumes it
 ```
 
-A green integrity check is never rendered as progress. §1's five trusted progress channels are unchanged; this section only forbids dressing the absence of movement as one of them.
+A green integrity check is never rendered as progress. §1's five certified research-state channels are unchanged; this section only forbids dressing the absence of movement as one of them.
 
 ---
 
