@@ -1,7 +1,7 @@
 # Certified Research Reduction Graph (CRRG)
 ## Kernel-checked research reduction and agent credit assignment
 
-**Status:** v0.8.3 — External Review 2 complete; first live deployment is Yukon, in bounded active autoresearch.  
+**Status:** v0.9.0-draft — the v0.9 orchestration layer is specified (§18–§27), implementation pending Phases B–F (§18.3); External Review 2 complete; first live deployment is Yukon, in bounded active autoresearch.  
 **Authority:** this file is the sole normative CRRG design / execution document. `CHANGELOG.md` records history and implementation findings; it does not choose targets or override this spec. Downstream notes are evidence only.  
 **Repository architecture:** CRRG is a standalone general-purpose Lean repository consumed as a pinned dependency by research projects.  
 **First integration / research test:** `Barnadrot/proximity-research`, using controlled Yukon lower-bound history before any CRRG-directed live Soundness work.  
@@ -957,3 +957,338 @@ Adjudicating `REFINED` is not enough, and a suite that stops there will certify 
 - [ ] A compatible external improvement below the root moves the bank only.
 - [ ] A compatible external result reaching the root triggers `SUPERSEDED` and an upward epoch transition.
 - [ ] External state whose statement compatibility cannot be mechanically certified is not admitted into CRRG state.
+
+---
+
+## 18. v0.9 — orchestration layer: purpose, scope, order
+
+The first live Yukon deployment validated target preservation, sealing, certified refinement/split, refutation, external bank updates, and tamper evidence. It also exposed three orchestration failures the architecture did not prevent:
+
+1. **Infinite preparation** — the researcher can repeatedly prove helper machinery while avoiding the hard mathematical crux.
+2. **Machinery-as-progress** — kernel-clean helper theorems and repeated no-op gate passes can be mistaken for progress.
+3. **Circling** — the researcher can repeatedly revisit the same exact obligation and the same family of mechanisms as research history grows.
+
+The motivating observation is operational, not mathematical: after iteration 24 the certified frontier stopped moving, while consecutive `RIGHT-DEPTH / UNCHANGED` iterations kept accumulating Lean machinery on one unchanged obligation. v0.9 specifies the response inside what is already technically specifiable. It does not claim to solve mathematical novelty or strategic theorem discovery; §26 records what is deferred and why.
+
+The design-lineage lesson stands: formal composition boundaries deserve to be first-class mathematical objects carrying the data and certificate needed for sound composition. v0.9 strengthens that property for research-state transitions — source state, target state, and preservation witness become first-class, and composition is kernel-proved (§20). Nothing from ArkLib or any application enters CRRG core (§2).
+
+### 18.1 Scope rule
+
+Implement only the parts that do not require a new automated-mathematics research programme to discover the right technique. The seven parts are §19–§25. Everything in §18–§27 is application-agnostic; the Yukon integration is Phase F (§18.3) and changes no historical state (§23).
+
+### 18.2 Runtime requirements for v0.9 work
+
+§11.1 remains normative. For the v0.9 implementation specifically:
+
+```text
+ordinary owner/implementor development loop
+  focused affected regression(s) + production gate
+  target <= 5 minutes, hard stop <= 10 minutes
+
+full acceptance suite
+  <= 15 minutes
+
+new stall / episode / obligation / mechanism unit tests
+  seconds, not whole-gate invocations
+```
+
+Before adding a test that invokes the full gate, estimate its runtime multiplier. No new feature is accepted without a runtime estimate. Do not weaken mathematical checks to meet runtime. If ordinary validation projects above 10 minutes, stop and profile before adding more tests.
+
+### 18.3 Implementation order
+
+The spec owner directs the implementation agent one phase at a time, in this order:
+
+```text
+A  spec only (this revision; no implementation)
+B  mathematical transition core (§20); synthetic Lean tests only; no downstream changes
+C  outcome semantics + stall state (§19, §22)
+D  episodes / unique obligations / mechanisms (§21, §23, §24)
+E  novelty evidence substrate (§25)
+F  Yukon integration — only after the generic phases pass
+```
+
+Phase F must preserve the current root/bank/frontier mathematics byte-for-byte unless a sanctioned external bank sync occurs independently; must not rewrite historical iterations; must begin episode/stall semantics from a declared forward boundary; must deduplicate same-proposition live obligations; must not render `NO_TRANSITION` as CRRG progress; and must trigger the stall audit after five future terminal no-transition attempts on one obligation. The research executor is not launched until the Phase F integration diff is audited.
+
+---
+
+## 19. Outcome semantics: integrity versus certified transition
+
+The pre-v0.9 outcome vocabulary conflated two questions: "is this state/outcome valid?" and "did the certified research state move?". They are separate axes.
+
+### 19.1 Two axes
+
+Integrity / adjudication status:
+
+```text
+VALID
+REJECTED
+TOOLING_FAILURE
+```
+
+Certified transition status:
+
+```text
+ADMITTED
+NO_TRANSITION
+```
+
+An `ADMITTED` transition also records its semantic kind:
+
+```text
+CLOSED / CERTIFIED
+REFINED
+SPLIT
+REFUTED
+RETIRED
+SUPERSEDED
+exact monotone quantitative movement, where a proved family supports it
+```
+
+The legacy §9.3.4 spellings may be preserved for compatibility; the semantic separation is mandatory. §16.7's two-axis reporting (`research_outcome` versus `transition_status`) is an instance of this rule, not an exception to it.
+
+### 19.2 `UNCHANGED` is not a successful transition
+
+`UNCHANGED` means `VALID` + `NO_TRANSITION`. It must never be rendered to the research executor as a green "PASS" that can be interpreted as progress. The research-facing command must distinguish `NO_TRANSITION` from an admitted transition by machine-readable output and a distinct exit code:
+
+```text
+0   admitted certified transition
+10  valid but NO_TRANSITION
+20  rejected research/state mutation
+30  tooling failure
+```
+
+The exact numbers may change where an existing CLI contract forces it; the four states must remain mechanically distinguishable. An integrity-only command may still return ordinary success for a valid unchanged state — a valid no-op is a research no-op, not a security failure.
+
+### 19.3 Reward semantics
+
+```text
+PROJECT REWARD
+  the external/canonical project gate; authoritative terminal-objective reward
+
+CRRG CERTIFIED MOVEMENT
+  a proof-carrying mutation of the faithful research state; not automatically
+  terminal reward
+
+RESEARCH EVIDENCE
+  helper theorems, constructions, experiments, counterexamples; useful evidence;
+  not certified graph movement unless an admitted transition consumes it
+```
+
+A green integrity check is never rendered as progress. §1's five trusted progress channels are unchanged; this section only forbids dressing the absence of movement as one of them.
+
+---
+
+## 20. First-class frontier transitions
+
+Accepted research-state mutations are themselves first-class proof objects. Add the minimal generic notion:
+
+```lean
+abbrev Frontier.AllClosed (F : Frontier root) : Prop :=
+  ∀ t, (F.leaf t).claim
+
+structure Frontier.Transition (source target : Frontier root) : Prop where
+  preserve : target.AllClosed → source.AllClosed
+```
+
+Names may be improved; the semantics must remain this simple. The definition must be universe-polymorphic in the two frontiers, because the existing operators change universe level (`splitLeaf` lands in `max u v`).
+
+Required generic theorems:
+
+```text
+identity transition
+transition composition
+root-closure transport: source.closeRoot composed with a
+  Transition source target yields target.AllClosed → root.claim
+```
+
+Every existing frontier operator must expose or induce a transition witness: `refineLeaf`, `splitLeaf`, and `retireLeaf` each induce a `Transition` from the pre-operation to the post-operation frontier. The point is an explicit certified state chain
+
+```text
+F0 --T1--> F1 --T2--> ... --Tn--> Fn
+```
+
+whose kernel-produced composite `Transition F0 Fn` makes closing `Fn` entail the original root through one composed certificate.
+
+Do not replace the existing `Goal`, `Edge`, `Split`, or `Frontier` semantics. Do not introduce category-theory machinery. Refutation is not a root-preserving transition and must not be encoded as one; candidate/route refutation remains its own proof-carrying fact (§5.1).
+
+---
+
+## 21. Unique live obligations
+
+Scheduling operates on exact mathematical obligations, not frontier task positions. If several task positions carry the same exact sealed proposition, they are one research obligation; a proof of that proposition may discharge every matching position.
+
+A canonical obligation identity is derived deterministically from the existing semantic seal information (§5.3). It must not be derived from a task display name, a generation number, or a free-text description.
+
+The scheduler-facing state must expose:
+
+```text
+frontier positions
+canonical obligation ID of each position
+all positions sharing an obligation
+```
+
+This prevents duplicate research effort of the kind a live deployment produces when two positions carry the same proposition.
+
+---
+
+## 22. Stall detector
+
+A generic, mechanically derived operational stall detector.
+
+Default rule:
+
+> Every 5 terminal `NO_TRANSITION` outcomes on the same canonical live obligation trigger `STALLED`.
+
+This is an orchestration fact, not a mathematical theorem about difficulty or truth. The count:
+
+- is per canonical obligation (§21);
+- increments only on a terminal `NO_TRANSITION`;
+- does not increment on checkpoints (§23);
+- does not reset because the agent rewrites prose;
+- resets when certified state movement materially changes, closes, or retires that obligation.
+
+At every multiple of 5 (`5, 10, 15, ...`), a stall response is mandatory before another research episode may launch on that obligation. A stall response is one of:
+
+```text
+RESELECT            choose another unique live obligation
+BACKTRACK           return to a certified ancestor / earlier admissible frontier position
+NEW_MECHANISM       continue the same exact obligation under a different recorded mechanism
+PROPOSE_REFINEMENT  provide an exact candidate + certified reduction
+OWNER_OVERRIDE      explicit operator decision
+```
+
+The detector must not infer that the theorem is false, that it is too difficult, that another leaf is easier, or that the reduction is over or under depth. Those remain separate judgements (§10). A `RIGHT-DEPTH` obligation can still become operationally `STALLED`; at that point the agent changes research behaviour rather than producing more helper machinery.
+
+Immediate relaunch of the same stalled obligation under the same recorded mechanism is rejected by the scheduler unless owner override is present.
+
+A stall count is orchestration state. It never feeds a score, a reward, or a rendered aggregate (§1).
+
+---
+
+## 23. Research episodes and checkpoints
+
+Not every helper-theorem commit is a complete research iteration. The orchestration semantics are:
+
+```text
+research episode
+  exact canonical obligation
+  exact certified start state
+  mechanism identity (§24)
+  zero or more checkpoints
+  one terminal outcome
+```
+
+A checkpoint may contain Lean lemmas, experiments, notes, and computations. It is append-only research evidence. It does not mutate the certified graph, does not increment the stall detector, does not produce `UNCHANGED`, and does not restart task selection.
+
+A terminal outcome is exactly one of: an admitted certified transition; `NO_TRANSITION`; a rejection or tooling failure (§19).
+
+Existing Git history remains valid evidence. Historical iterations are not rewritten; this is forward-only orchestration semantics, beginning from a declared forward boundary in each deployment.
+
+---
+
+## 24. Mechanism identity
+
+Semantic mechanism equivalence is not solved in v0.9 (§26, R2). What exists is a stable mechanism-record substrate.
+
+A mechanism record is append-only and ties together:
+
+```text
+canonical obligation ID (§21)
+certified route / ancestor anchor
+stable mechanism ID
+optional exact candidate IDs
+declared basis theorem / declaration names that mechanically resolve
+```
+
+The system may fingerprint the record deterministically. The fingerprint means only "the researcher declared this as the same recorded mechanism". It does not certify mathematical novelty, and new prose alone must not silently mutate an existing record.
+
+Mechanism identity is used for stall-response enforcement (§22), visit history, detection of immediate repetition, and later novelty/circling research (§25, §26). No heuristic embedding or similarity score enters the trust boundary.
+
+---
+
+## 25. Novelty evidence substrate — no novelty score
+
+Novel mathematics and graph movement are not the same thing; the live deployment demonstrated both directions. v0.9 records evidence without pretending to measure novelty.
+
+For each episode or checkpoint, a machine-readable evidence record may be attached to exact Lean declarations:
+
+```text
+declaration
+type fingerprint
+source commit
+dependency closure fingerprint
+intended exact consumer / obligation
+whether the consumer is certified / live
+whether the declaration is used by an admitted transition
+```
+
+Permitted mechanical classifications:
+
+```text
+NEW_DECLARATION
+EXISTING_DECLARATION
+CONSUMED_BY_CERTIFIED_TRANSITION
+UNCONSUMED
+```
+
+An optional human or research-loop label may exist:
+
+```text
+NOVELTY_UNASSESSED
+KNOWN_OR_FORMALIZATION
+CANDIDATE_NOVEL
+```
+
+It is metadata only and must never affect certified state or project reward.
+
+Not implemented, and forbidden as trusted state:
+
+```text
+novelty percentages
+theorem-count rewards
+LLM novelty judging as trusted state
+literature novelty claims from syntax
+any scalar "research progress" score
+```
+
+The substrate exists so a later dedicated novelty-research programme has evidence to work on (§26, R1). Evidence records cannot mutate the root, the frontier, candidate truth state, project reward, or the stall count except through normal terminal episode semantics.
+
+---
+
+## 26. Deferred — each requires its own research programme
+
+The following are not v0.9 implementation tasks. Each needs separate automated research or experimental work to find a defensible mathematical or algorithmic technique.
+
+**R1. True mathematical novelty measurement.** Distinguishing a novel theorem from a reformulation, specialization, rediscovery, or straightforward formalization. Needs research on theorem equivalence / implication search, bounded corpus comparison, literature provenance, semantic novelty evidence, and adversarial gaming. v0.9 only captures evidence (§25).
+
+**R2. Semantic mechanism equivalence.** When two research routes are genuinely distinct mathematical mechanisms rather than renamed variants. v0.9 records mechanism identities (§24) and certifies nothing about equivalence or difference.
+
+**R3. Strategic reduction quality.** Certifying or predicting that a logically sufficient child is a strategically better research target. CRRG does not invent an "easier than" oracle; the §10 depth audit remains explicit judgement.
+
+**R4. Automatic mechanism synthesis after stall.** Given a precise obstruction, synthesizing a genuinely new mathematical attack rather than another helper lemma. A natural dedicated autoresearch benchmark.
+
+**R5. Semantic obstruction objects.** First-class exact "obstruction" objects connecting failed mechanisms, counterexamples, and missing premises to candidate new reductions. Not standardized before empirical and mathematical research demonstrates the right abstraction.
+
+---
+
+## 27. Acceptance criteria for v0.9
+
+v0.9 is ready for downstream live testing only when every item is true. These join §17's live-deployment criteria; both sets are exercised under the §11.1 / §18.2 validation architecture.
+
+- [ ] Accepted frontier mutations have first-class composable preservation witnesses (§20).
+- [ ] A composite certified state chain mechanically yields root closure from final frontier closure.
+- [ ] `NO_TRANSITION` is mechanically distinct from an admitted transition (§19).
+- [ ] The research-facing CLI neither prints nor returns ordinary success for `NO_TRANSITION`.
+- [ ] Canonical unique obligations deduplicate duplicate frontier positions (§21).
+- [ ] Five terminal no-transitions on one obligation mechanically trigger `STALLED` (§22).
+- [ ] Checkpoints do not increment the stall count (§23).
+- [ ] The stall detector asserts no mathematical falsehood or difficulty (§22).
+- [ ] The same stalled obligation under the same recorded mechanism cannot immediately relaunch without explicit owner override (§22, §24).
+- [ ] Mechanism history is append-only and deterministic (§24).
+- [ ] Novelty evidence is recorded without becoming reward or trusted state movement (§25).
+- [ ] Old CRRG core semantics and seals remain valid.
+- [ ] The generic CRRG full acceptance suite remains within its runtime budget (§11.1, §18.2).
+- [ ] The downstream Yukon integration preserves the current certified mathematics (§18.3).
+- [ ] Historical Yukon iterations are not rewritten (§23).
+
+Stop for owner review after Phase F before launching live autoresearch under v0.9 semantics.

@@ -31,6 +31,9 @@ proved parameter p_old -> strictly stronger p_new
 
 No aggregate percentage is ever computed. No synthetic global score exists.
 
+A valid state that did not move (`NO_TRANSITION`) is not reward and is never
+reported as progress (`Spec.md` §19).
+
 ## What an agent must NOT do
 
 - Weaken the assigned leaf's proposition.

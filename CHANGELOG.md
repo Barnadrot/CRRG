@@ -196,6 +196,35 @@ the staged implementation plan (§15). Do not reconcile the two.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `SPEC-12` — v0.9.0-draft: the orchestration layer becomes normative
+
+The first live Yukon deployment validated the trust machinery and exposed three
+orchestration failures it does not prevent: infinite preparation,
+machinery-as-progress, and circling. The motivating observation is operational,
+not mathematical: after iteration 24 the certified frontier stopped moving while
+consecutive `RIGHT-DEPTH / UNCHANGED` iterations accumulated substantial Lean
+machinery on one unchanged obligation. v0.9 specifies the response inside what
+is already technically specifiable, and records what it deliberately does not
+attempt.
+
+`Spec.md` gains §18–§27: integrity versus certified-transition outcome semantics
+(`UNCHANGED` is `VALID` + `NO_TRANSITION`, never a rendered success; the four
+research-facing exit states are mechanically distinguishable); first-class
+composable `Frontier.Transition` preservation witnesses with a kernel-produced
+composite state chain; canonical unique obligations derived from seal
+information rather than task names; a mechanical stall detector (five terminal
+no-transitions on one canonical obligation, a mandatory response menu, and no
+difficulty/falsehood inference); forward-only episode/checkpoint semantics;
+append-only mechanism identity with no similarity score in the trust boundary;
+and a novelty evidence substrate with no novelty score. Deferred research
+programmes R1–R5 are recorded in §26.
+
+No Lean or script changes. The conformance matrix is unchanged; it gains v0.9
+rows as the implementation phases land. The phase order (B–F, §18.3) is
+directed by the spec owner, and the research executor is not launched under
+v0.9 semantics until the Phase F integration diff is audited and the owner
+reviews.
+
 #### `CHG-33` — `crrg-depth-check`: §10 becomes a step rather than an aspiration
 
 §10 has always asked a deployment to classify its active state as `OVERREDUCED`,
