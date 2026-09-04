@@ -193,7 +193,9 @@ the staged implementation plan (§15). Do not reconcile the two.
 |-----|-------------|--------|-----|
 | 20 | `Frontier.AllClosed`, `Frontier.Transition`, identity / composition / root-closure transport | DONE | `CHG-34` |
 | 20 | `refineLeaf` / `splitLeaf` / `retireLeaf` each induce a transition witness | DONE | `CHG-34` |
-| 19, 21–25 | outcome semantics, unique obligations, stall detector, episodes, mechanism identity, novelty evidence | MISSING | spec `SPEC-12`; Phases C–E pending |
+| 19 | two-axis outcome model; the four exit states mechanically distinguishable; `UNCHANGED` never rendered as success | DONE | `CHG-35` |
+| 22 | stall state machine: per-obligation counting, mandatory trigger, block clears only via response or certified movement | DONE | `CHG-35` |
+| 21, 23–25 | unique obligations, episodes, mechanism identity, novelty evidence | MISSING | spec `SPEC-12`; Phases D–E pending |
 
 ---
 
@@ -203,6 +205,30 @@ the staged implementation plan (§15). Do not reconcile the two.
 
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
+
+#### `CHG-35` — two-axis outcome semantics and the stall detector (v0.9 Phase C)
+
+§19 lands as `CRRG/Outcome.lean`: `TerminalOutcome` is the product of the two
+axes *already quotiented by legality* — an admitted transition that was
+rejected, or that claims no semantic kind, has no term — with `integrity`,
+`isAdmitted`, `exitCode` (0/10/20/30), and the four characterising `iff`s that
+make the states mechanically distinguishable a theorem rather than a contract.
+`noTransition` is proved valid-but-not-admitted: neither an error nor progress.
+
+§22 lands as `CRRG/Stall.lean`: a generic state machine over an abstract
+obligation key (canonical derivation is Phase D; nothing here hashes or invents
+a key), with the threshold travelling in the state and `defaultThreshold = 5`.
+Certified movement resets the obligation; checkpoints, rejections and tooling
+failures are definitional no-ops; every event is provably local to its key. One
+rule needed an explicit call, and the spec now makes it (§22): a block clears
+only through a recorded stall response or certified movement — under the
+literal assigning reading a sixth no-transition would compute `6 % 5 ≠ 0` and
+un-stall the obligation by producing more of what §22 exists to interrupt.
+`noTransition_not_unblocks` pins the property; the tests exercise count 6
+directly.
+
+72 synthetic examples, all `rfl`/`decide` on finite data; nothing invokes the
+gate. Strictly additive: two core modules, two test modules, two import lines.
 
 #### `CHG-34` — first-class frontier transitions (v0.9 Phase B)
 

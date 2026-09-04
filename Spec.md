@@ -1159,7 +1159,7 @@ OWNER_OVERRIDE      explicit operator decision
 
 The detector must not infer that the theorem is false, that it is too difficult, that another leaf is easier, or that the reduction is over or under depth. Those remain separate judgements (§10). A `RIGHT-DEPTH` obligation can still become operationally `STALLED`; at that point the agent changes research behaviour rather than producing more helper machinery.
 
-Immediate relaunch of the same stalled obligation under the same recorded mechanism is rejected by the scheduler unless owner override is present.
+Immediate relaunch of the same stalled obligation under the same recorded mechanism is rejected by the scheduler unless owner override is present. A block clears only through a recorded stall response or through certified state movement that materially changes, closes, or retires the obligation; producing further `NO_TRANSITION` outcomes never clears it.
 
 A stall count is orchestration state. It never feeds a score, a reward, or a rendered aggregate (§1).
 
