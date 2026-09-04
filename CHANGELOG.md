@@ -195,7 +195,11 @@ the staged implementation plan (§15). Do not reconcile the two.
 | 20 | `refineLeaf` / `splitLeaf` / `retireLeaf` each induce a transition witness | DONE | `CHG-34` |
 | 19 | two-axis outcome model; the four exit states mechanically distinguishable; `UNCHANGED` never rendered as success | DONE | `CHG-35` |
 | 22 | stall state machine: per-obligation counting, mandatory trigger, block clears only via response or certified movement | DONE | `CHG-35` |
-| 21, 23–25 | unique obligations, episodes, mechanism identity, novelty evidence | MISSING | spec `SPEC-12`; Phases D–E pending |
+| 21 | canonical unique-obligation view: obligation identity is the seal hash; duplicate positions flagged | DONE (generic tooling) | `CHG-36` |
+| 22 | stall replay + `may-launch` guard in generic tooling, mirroring `CRRG/Stall.lean` | DONE | `CHG-36` |
+| 23 | episode / checkpoint records: append-only log, one terminal per episode, forward-only | DONE (generic tooling) | `CHG-36` |
+| 24 | mechanism registry: append-only, fingerprint over semantic fields only, basis resolve-check | DONE (generic tooling) | `CHG-36` |
+| 25 | novelty evidence substrate | MISSING | spec `SPEC-12`; Phase E pending |
 
 ---
 
@@ -205,6 +209,39 @@ the staged implementation plan (§15). Do not reconcile the two.
 
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
+
+#### `CHG-36` — episodes, mechanism records, unique obligations (v0.9 Phase D)
+
+The orchestration state tooling lands as three python3 scripts (the
+`banned_scan.py` precedent), with no Lean changes — episodes, obligations and
+mechanisms are orchestration metadata and need no kernel objects.
+
+`crrg-episode` keeps the single append-only artifact of §23: an eight-column log
+(`OPEN`/`CHECKPOINT`/`TERMINAL`/`RESPONSE`) with whole-log validation before
+every append and byte-identical failure paths. Stall state is *derived by
+replaying the log*, mirroring `CRRG/Stall.lean` exactly — accumulate-not-assign,
+responses and admitted movement as the only clears, integrity events inert —
+rather than maintained as a second store that could drift from it. `terminal`
+exits with the §19.2 codes, making the recorder the research-facing primitive a
+deployment composes. `may-launch` is the scheduler guard: blocked ⇒ refused;
+the same-mechanism-after-stall refusal is immediate-only by design (durable
+anti-circling is §26 R2, not enforcement).
+
+`crrg-mechanism` keeps the §24 append-only mechanism registry. The fingerprint
+is sha256 over the identifying fields with the note excluded — prose is not
+identity, in both directions: rewording a note neither mints a new mechanism nor
+mutates an existing one. `resolve-check` mechanically resolves basis
+declarations against the configured environment and fails loudly (exit 30) when
+no environment is configured rather than silently skipping.
+
+`crrg-obligations` derives the §21 canonical identity from the seal hash — the
+registry already refuses one proposition under two ids, so the failure that
+remains is two task positions on one proposition, which `view` flags as
+`DUPLICATE`. Output is deterministic and prints no aggregate of any kind.
+
+Self-tests 66 → 91 (+1.35s); the auditor independently re-ran the suite and a
+40-check fixture over the stall walk, exit codes, byte-identical failure,
+registry discipline and duplicate detection.
 
 #### `CHG-35` — two-axis outcome semantics and the stall detector (v0.9 Phase C)
 
