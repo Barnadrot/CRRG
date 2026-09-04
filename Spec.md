@@ -1275,20 +1275,20 @@ The following are not v0.9 implementation tasks. Each needs separate automated r
 
 v0.9 is ready for downstream live testing only when every item is true. These join §17's live-deployment criteria; both sets are exercised under the §11.1 / §18.2 validation architecture.
 
-- [ ] Accepted frontier mutations have first-class composable preservation witnesses (§20).
-- [ ] A composite certified state chain mechanically yields root closure from final frontier closure.
-- [ ] `NO_TRANSITION` is mechanically distinct from an admitted transition (§19).
-- [ ] The research-facing CLI neither prints nor returns ordinary success for `NO_TRANSITION`.
-- [ ] Canonical unique obligations deduplicate duplicate frontier positions (§21).
-- [ ] Five terminal no-transitions on one obligation mechanically trigger `STALLED` (§22).
-- [ ] Checkpoints do not increment the stall count (§23).
-- [ ] The stall detector asserts no mathematical falsehood or difficulty (§22).
-- [ ] The same stalled obligation under the same recorded mechanism cannot immediately relaunch without explicit owner override (§22, §24).
-- [ ] Mechanism history is append-only and deterministic (§24).
-- [ ] Novelty evidence is recorded without becoming reward or trusted state movement (§25).
-- [ ] Old CRRG core semantics and seals remain valid.
-- [ ] The generic CRRG full acceptance suite remains within its runtime budget (§11.1, §18.2).
-- [ ] The downstream Yukon integration preserves the current certified mathematics (§18.3).
-- [ ] Historical Yukon iterations are not rewritten (§23).
+- [x] Accepted frontier mutations have first-class composable preservation witnesses (§20). — `CHG-34`
+- [x] A composite certified state chain mechanically yields root closure from final frontier closure. — `CHG-34`
+- [x] `NO_TRANSITION` is mechanically distinct from an admitted transition (§19). — `CHG-35`
+- [x] The research-facing CLI neither prints nor returns ordinary success for `NO_TRANSITION`. — `CHG-38`; auditor-run gate: exit 10
+- [x] Canonical unique obligations deduplicate duplicate frontier positions (§21). — `CHG-36`, wired downstream `CHG-38`
+- [x] Five terminal no-transitions on one obligation mechanically trigger `STALLED` (§22). — `CHG-35`, `CHG-36`
+- [x] Checkpoints do not increment the stall count (§23). — `CHG-35`, `CHG-36`
+- [x] The stall detector asserts no mathematical falsehood or difficulty (§22). — `CHG-35`
+- [x] The same stalled obligation under the same recorded mechanism cannot immediately relaunch without explicit owner override (§22, §24). — `CHG-36`, enforced at `open` `CHG-38`
+- [x] Mechanism history is append-only and deterministic (§24). — `CHG-36`
+- [x] Novelty evidence is recorded without becoming reward or trusted state movement (§25). — `CHG-37`
+- [x] Old CRRG core semantics and seals remain valid. — every phase strictly additive; gates green throughout
+- [x] The generic CRRG full acceptance suite remains within its runtime budget (§11.1, §18.2). — `crrg-check` ≈ 50 s. Note: the downstream *acceptance tier* exceeds 15 min; recorded in `CHG-38` for the owner
+- [x] The downstream Yukon integration preserves the current certified mathematics (§18.3). — `CHG-38`; frozen set byte-identical, auditor-verified
+- [x] Historical Yukon iterations are not rewritten (§23). — `CHG-38`
 
 Stop for owner review after Phase F before launching live autoresearch under v0.9 semantics.

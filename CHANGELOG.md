@@ -200,6 +200,7 @@ the staged implementation plan (§15). Do not reconcile the two.
 | 23 | episode / checkpoint records: append-only log, one terminal per episode, forward-only | DONE (generic tooling) | `CHG-36` |
 | 24 | mechanism registry: append-only, fingerprint over semantic fields only, basis resolve-check | DONE (generic tooling) | `CHG-36` |
 | 25 | novelty evidence substrate: append-only records, log-local classification, labels inert, isolation from certified state | DONE (generic tooling) | `CHG-37` |
+| 18.3 | Phase F Yukon integration: two-axis gate, obligation view, episode/stall adoption, frozen set preserved | DONE (branch `crrg-yukon-v09`, audited; merge pending owner) | `CHG-38` |
 
 ---
 
@@ -209,6 +210,39 @@ the staged implementation plan (§15). Do not reconcile the two.
 
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
+
+#### `CHG-38` — v0.9 Phase F: Yukon integration, and the stall gate at episode open
+
+F0 (the only CRRG-side change): `crrg-episode open` now enforces the launch
+guard `may-launch` reports — one shared `launch_refusal`, so a blocked
+obligation or the armed same mechanism is refused at `open` (exit 20), and the
+only override is the append-only `ownerOverride` RESPONSE row. A guard that
+answers one way when asked and another when acted on is not a guard.
+
+The downstream integration landed on branch `crrg-yukon-v09` (worktree
+`proximity-research-v09`, forked at `fb1a1796`, audited through `6dca780f`):
+the CRRG pin moved to the v0.9 line (development URL; the trusted github re-pin
+at the same SHA is the pending owner action); the §21 obligation view is wired
+(`manifest.tsv` × seal registry; the L016/L017 duplicate is now *shown* as one
+obligation); the live gate carries the §19 two-axis tail — exit 0/10/20/30,
+never a bare PASS for a no-transition, and the transition axis derived from
+what actually moved: frontier activation detected naming-agnostically from the
+`abbrev current` right-hand side, root closure counted, and §16.5's two import
+cases distinguished by the recorded sync verdict (a bank-only move is never
+charged to a research episode; supersession is never an agent proof). Episode,
+mechanism and evidence logs are adopted as append-only orchestration state with
+a [5c] gate section mirroring [5b]. The frozen set — root, bank, frontier,
+seals, ledgers, the programme file — is byte-identical across the branch.
+
+The audit caught one regression the implementation report had missed (an
+activation naming-independent from `genN` rendered as NO_TRANSITION; fixed in
+F.1 with fixtures in both directions) and §11.1 pressure worth an owner look:
+the downstream *acceptance* tier runs ~18–20 minutes against the 15-minute
+budget, driven by two full production gate runs plus the import transaction.
+
+v0.9 remains owner-gated: no live relaunch under v0.9 semantics until the owner
+reviews, the programme edit (researcher-side episode flow) lands, and the push
++ trusted re-pin complete.
 
 #### `CHG-37` — novelty evidence substrate, recording only (v0.9 Phase E)
 
