@@ -9,3 +9,4 @@ import CRRG.Debt
 import CRRG.Candidate
 import CRRG.Report
 import CRRG.Audit
+import CRRG.Transition
