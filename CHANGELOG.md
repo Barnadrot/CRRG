@@ -199,7 +199,7 @@ the staged implementation plan (§15). Do not reconcile the two.
 | 22 | stall replay + `may-launch` guard in generic tooling, mirroring `CRRG/Stall.lean` | DONE | `CHG-36` |
 | 23 | episode / checkpoint records: append-only log, one terminal per episode, forward-only | DONE (generic tooling) | `CHG-36` |
 | 24 | mechanism registry: append-only, fingerprint over semantic fields only, basis resolve-check | DONE (generic tooling) | `CHG-36` |
-| 25 | novelty evidence substrate | MISSING | spec `SPEC-12`; Phase E pending |
+| 25 | novelty evidence substrate: append-only records, log-local classification, labels inert, isolation from certified state | DONE (generic tooling) | `CHG-37` |
 
 ---
 
@@ -209,6 +209,25 @@ the staged implementation plan (§15). Do not reconcile the two.
 
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
+
+#### `CHG-37` — novelty evidence substrate, recording only (v0.9 Phase E)
+
+§25 lands as `scripts/crrg-evidence`: an append-only evidence log with the seven
+§25 record fields plus the optional novelty label, classified mechanically and
+honestly — `NEW_DECLARATION` / `EXISTING_DECLARATION` is stated to be log-local
+bookkeeping, and `CONSUMED_BY_CERTIFIED_TRANSITION` is printed with its exact
+meaning ("recorded as evidence within an episode that terminated in an admitted
+certified transition"), with dependency-closure-level consumption explicitly a
+downstream refinement. The label is stored, printed, and computed from by
+nothing. The tool reads the episode log for referential integrity and never
+writes anything but its own log; the isolation property — evidence operations
+leave the episode log byte-identical and stall status unchanged — is a self-test,
+not an assurance. Every emitted line was scanned against §25's forbidden list;
+the only number any subcommand prints is `validate`'s `rows N`, the log
+statistic already ratified for `crrg-episode`.
+
+Self-tests 91 → 102 (+0.91s). Generic phases B–E are complete; what remains is
+Phase F, the downstream integration, and then owner review.
 
 #### `CHG-36` — episodes, mechanism records, unique obligations (v0.9 Phase D)
 
