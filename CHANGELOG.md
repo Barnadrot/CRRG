@@ -211,6 +211,52 @@ the staged implementation plan (§15). Do not reconcile the two.
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
 
+#### `SPEC-13` — v0.9 finalization: status, channel naming, enforcement-accurate §24/§25
+
+Owner-directed finalization, four edits: the status line moves to `v0.9.0-rc`
+(implemented and audited, review candidate); §1's channel list takes the paper's
+name — certified research-state channels — with the three-way distinction
+(project reward / CRRG certified movement / research evidence) stated at the
+list itself; §25's classification names are replaced by what the tool actually
+computes (`IN_ADMITTED_EPISODE` / `NOT_IN_ADMITTED_EPISODE` — co-occurrence,
+with dependency-closure consumption explicitly named as the downstream-refinable
+question it is), and the fingerprint fields now say what they deterministically
+are (caller-supplied sha256 digests per the §5.3 definition, `-` when not
+computed, never invented by the tool); and §24 records the enforcement
+asymmetry as normative — basis declarations are mechanically resolved, the
+anchor is declarative and fingerprint-covered but unresolved, because v0.9
+prescribes no anchor shape and a checker without a prescribed shape invents a
+convention rather than verifies one.
+
+#### `CHG-39` — finalization: the evidence rename, the anchor limitation, the runtime profile
+
+`crrg-evidence`: `CONSUMED_BY_CERTIFIED_TRANSITION` → `IN_ADMITTED_EPISODE`,
+`UNCONSUMED` → `NOT_IN_ADMITTED_EPISODE` — a name was doing work the code had
+not done, which is the over-claiming §25 exists to refuse, one level up. No
+behavioural change; 106/106 self-tests green.
+
+The `anchor_ref` investigation produced a verified limitation rather than a
+check: nothing resolves the anchor, nothing downstream consumes it, the registry
+has zero rows, and no shape is prescribed anywhere — so a two-shape check would
+have created a convention by validator, in the same phase whose item 1 exists to
+stop names claiming more than the code computes. The limitation is now normative
+in §24 (`SPEC-13`).
+
+D2 was explained exactly and is ordering, not semantics: the divergent file is
+LowerEnv's *generated*, gitignored `lake-manifest.json`, created when
+`yukon_verify.sh` builds LowerEnv as root; Lake ignores a non-root manifest;
+and the mirror demonstrably built 3747 jobs clean without one throughout
+Phase F. Disposition stays with the owner.
+
+The acceptance-tier profile found exactly one duplication (a build performed
+twice across a fixture boundary; removed, `crrg-yukon-v09` @ `6856acf9`, focused
+group 26/26) and an honest stop: the remaining ~20 minutes is coverage — the one
+full import transaction, two full production gates in opposite transition-axis
+directions, whole-registry seal verification, per-case kernel elaboration — and
+reaching 15 minutes would remove a check, not a repetition. The tier was not
+re-run in full because the projection stayed above budget; the disposition
+(accept, re-scope, or amend the budget text) is the owner's.
+
 #### `CHG-38` — v0.9 Phase F: Yukon integration, and the stall gate at episode open
 
 F0 (the only CRRG-side change): `crrg-episode open` now enforces the launch

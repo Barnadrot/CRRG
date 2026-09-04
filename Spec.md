@@ -1204,6 +1204,8 @@ declared basis theorem / declaration names that mechanically resolve
 
 The system may fingerprint the record deterministically. The fingerprint means only "the researcher declared this as the same recorded mechanism". It does not certify mathematical novelty, and new prose alone must not silently mutate an existing record.
 
+Enforcement is asymmetric, and the asymmetry is normative. The basis declarations are mechanically resolved (`resolve-check` against the configured environment). The anchor is declarative: it is fingerprinted with the record, so it cannot be silently changed under a fixed mechanism id, but nothing resolves it against certified lineage, because v0.9 prescribes no anchor shape. Prescribing one (a generation lineage theorem, a sealed candidate id, a commit) is a §24 decision deferred until a deployment has a real usage pattern to prescribe from; until then a checker would be inventing a convention, not verifying one.
+
 Mechanism identity is used for stall-response enforcement (§22), visit history, detection of immediate repetition, and later novelty/circling research (§25, §26). No heuristic embedding or similarity score enters the trust boundary.
 
 ---
@@ -1216,12 +1218,16 @@ For each episode or checkpoint, a machine-readable evidence record may be attach
 
 ```text
 declaration
-type fingerprint
+type fingerprint                   caller-supplied deterministic digest (sha256
+                                   over the declaration's type, as in the §5.3
+                                   seal definition); `-` when not computed —
+                                   the evidence tool never invents one
 source commit
-dependency closure fingerprint
+dependency closure fingerprint     same rule, over the transitive in-scope
+                                   dependency closure; `-` when not computed
 intended exact consumer / obligation
 whether the consumer is certified / live
-whether the declaration is used by an admitted transition
+the episode the record belongs to
 ```
 
 Permitted mechanical classifications:
@@ -1229,9 +1235,11 @@ Permitted mechanical classifications:
 ```text
 NEW_DECLARATION
 EXISTING_DECLARATION
-CONSUMED_BY_CERTIFIED_TRANSITION
-UNCONSUMED
+IN_ADMITTED_EPISODE
+NOT_IN_ADMITTED_EPISODE
 ```
+
+The names assert exactly what is computed. The first pair is log-local bookkeeping: first or later appearance of the (declaration, type fingerprint) pair in the evidence log. The second pair is co-occurrence: whether the record's episode terminated `admitted-*`. Co-occurrence is not dependency-closure consumption — whether an admitted transition's witness actually depends on a declaration is a question about that witness's closure, checkable downstream with the existing §6 forbid-class machinery, and deliberately not asserted by the evidence log.
 
 An optional human or research-loop label may exist:
 
