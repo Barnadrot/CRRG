@@ -53,12 +53,19 @@ WHAT THE TWO CLASSIFICATIONS MEAN, EXACTLY
         Log-local bookkeeping. It is not a claim that the declaration is new to
         mathematics, to the literature, or even to the repository.
 
-    CONSUMED_BY_CERTIFIED_TRANSITION / UNCONSUMED
-        whether the record was recorded as evidence within an episode that
-        terminated in an admitted certified transition. Whether the declaration
-        is genuinely reachable in that transition's dependency closure is a
-        stronger question, and answering it is a downstream refinement (Phase F),
-        not something this tool pretends to have done.
+    IN_ADMITTED_EPISODE / NOT_IN_ADMITTED_EPISODE
+        CO-OCCURRENCE, and nothing more: the record was written against an
+        episode that terminated `admitted-*`. That is the whole fact.
+
+        It is NOT a claim that the declaration was used by the transition. These
+        names used to say `CONSUMED_BY_CERTIFIED_TRANSITION`, which asserted
+        exactly that stronger thing while computing only the weaker one -- a
+        name doing work the code had not done. Whether a declaration is actually
+        reachable in an admitted transition's dependency closure is a question
+        about that witness's closure, it is checkable downstream with the
+        existing `crrg-forbid`-class machinery, and it is deliberately not
+        asserted here. Deciding it would need the witness identity in the
+        episode record, which this schema does not carry.
 """
 
 import argparse
@@ -124,7 +131,8 @@ def read_episodes(path: Path):
     return episodes
 
 
-def consumed(outcome) -> bool:
+def in_admitted_episode(outcome) -> bool:
+    """Did the record's episode terminate `admitted-*`? Co-occurrence only."""
     return bool(outcome) and outcome.startswith("admitted-")
 
 
@@ -298,10 +306,11 @@ def cmd_classify(args, records, episodes, _path, _before) -> int:
     print("later appearance of this (decl, type_fp) pair in THIS log. It is not a")
     print("claim about mathematics, the literature, or the repository.")
     print("")
-    print("CONSUMED_BY_CERTIFIED_TRANSITION means: recorded as evidence within an")
-    print("episode that terminated in an admitted certified transition. Whether the")
-    print("declaration is reachable in that transition's dependency closure is a")
-    print("downstream refinement, not this tool.")
+    print("IN_ADMITTED_EPISODE is CO-OCCURRENCE: the record was written against an")
+    print("episode that terminated admitted-*. That is the whole fact, and it is not")
+    print("a claim that the transition used this declaration. Whether it is actually")
+    print("reachable in that witness's dependency closure is checkable downstream")
+    print("with the crrg-forbid-class machinery, and is not asserted here.")
     print("")
 
     order = []
@@ -320,8 +329,8 @@ def cmd_classify(args, records, episodes, _path, _before) -> int:
             outcome = episodes.get(rec["episode_id"])
             print(f"  record at line {rec['_lineno']}  episode {rec['episode_id']}")
             print("    " + ("NEW_DECLARATION" if position == 0 else "EXISTING_DECLARATION"))
-            print("    " + ("CONSUMED_BY_CERTIFIED_TRANSITION" if consumed(outcome)
-                            else "UNCONSUMED"))
+            print("    " + ("IN_ADMITTED_EPISODE" if in_admitted_episode(outcome)
+                            else "NOT_IN_ADMITTED_EPISODE"))
             print(f"    terminal-outcome: {outcome or '-'}")
             print(f"    novelty-label: {rec['novelty_label']}  (not used above)")
         print("")

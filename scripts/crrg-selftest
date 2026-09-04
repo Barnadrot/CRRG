@@ -783,10 +783,12 @@ expect ok "NEW_DECLARATION" \
   "the first record of a (decl, type_fp) classifies NEW_DECLARATION" \
   "$EV" classify "$EVLOG" "$EVEP"
 
-# Episode v1 terminated admitted-refined, so evidence recorded inside it was
-# consumed by a certified transition; v2 terminated noTransition, so it was not.
-expect ok "CONSUMED_BY_CERTIFIED_TRANSITION" \
-  "evidence in an episode that terminated admitted-refined is CONSUMED" \
+# Episode v1 terminated admitted-refined, so evidence written against it
+# CO-OCCURS with an admitted transition; v2 terminated noTransition, so it does
+# not. Co-occurrence is the whole claim: neither name says the transition used
+# the declaration, and the tool does not compute that.
+expect ok "IN_ADMITTED_EPISODE" \
+  "evidence in an episode that terminated admitted-refined is IN_ADMITTED_EPISODE" \
   "$EV" classify "$EVLOG" "$EVEP"
 
 "$EV" record "$EVLOG" "$EVEP" --decl CRRG.Helper.lemma --commit c0ffee \
@@ -795,8 +797,8 @@ expect ok "EXISTING_DECLARATION" \
   "re-recording the same (decl, type_fp) classifies EXISTING_DECLARATION" \
   "$EV" classify "$EVLOG" "$EVEP"
 
-expect ok "UNCONSUMED" \
-  "evidence in an episode that terminated noTransition is UNCONSUMED" \
+expect ok "NOT_IN_ADMITTED_EPISODE" \
+  "evidence in an episode that terminated noTransition is NOT_IN_ADMITTED_EPISODE" \
   "$EV" classify "$EVLOG" "$EVEP"
 
 # The label is metadata (§25): stored, printed back, and computed from by
