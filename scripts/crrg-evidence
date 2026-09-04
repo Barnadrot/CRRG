@@ -1,0 +1,485 @@
+#!/usr/bin/env python3
+"""Append-only novelty *evidence* log (Spec §25).
+
+Usage:
+    crrg-evidence record   <evidence-log> <episode-log> --decl D --commit SHA
+                           --episode E [--type-fp F] [--closure-fp C]
+                           [--consumer O] [--consumer-state S] [--label L] [note]
+    crrg-evidence classify <evidence-log> <episode-log>
+    crrg-evidence view     <evidence-log>
+    crrg-evidence validate <evidence-log> <episode-log>
+
+Ten fixed TSV columns, `#` comment lines allowed:
+
+    decl  type_fp  closure_fp  source_commit  consumer_obligation  consumer_state
+    novelty_label  episode_id  created  note
+
+THERE IS NO NOVELTY SCORE HERE, AND THERE MUST NEVER BE ONE
+-----------------------------------------------------------
+Novel mathematics and graph movement are not the same thing, and the live
+deployment produced both directions of that mismatch. §25's response is to
+*record evidence* so that a later dedicated novelty-research programme (§26, R1)
+has something to work on -- not to measure novelty now.
+
+So this tool stores facts and prints them back. It computes exactly two
+mechanical classifications, both of which are bookkeeping about this log and the
+episode log, and neither of which is a judgement about mathematics. §25 forbids
+as trusted state: novelty percentages, theorem-count rewards, LLM novelty
+judging, literature novelty claims from syntax, and any scalar "research
+progress" score. Accordingly no subcommand here prints a count of records, a
+count of labels, a ratio, a total, or a ranking -- not as a summary line, not as
+a convenience. If a future edit wants to add one, that edit is the thing §25
+exists to refuse.
+
+`novelty_label` is metadata. It is stored, printed back, and used to compute
+nothing whatsoever; `classify` reaches the same answer whatever the label says.
+
+WHAT THIS TOOL DOES NOT TOUCH
+-----------------------------
+Everything. Evidence records cannot mutate the root, the frontier, candidate
+truth state, project reward, or the stall count -- those move only through normal
+terminal episode semantics (§25).
+
+Structurally rather than by promise: this script has no Lean environment
+interaction, does not read seal registries or any governance file, and its only
+write path is an append to its own evidence log. It opens the episode log
+read-only, to resolve `episode_id` and to see how an episode terminated, and
+never writes to it.
+
+WHAT THE TWO CLASSIFICATIONS MEAN, EXACTLY
+------------------------------------------
+    NEW_DECLARATION / EXISTING_DECLARATION
+        first / not-first appearance of this (decl, type_fp) pair *in this log*.
+        Log-local bookkeeping. It is not a claim that the declaration is new to
+        mathematics, to the literature, or even to the repository.
+
+    CONSUMED_BY_CERTIFIED_TRANSITION / UNCONSUMED
+        whether the record was recorded as evidence within an episode that
+        terminated in an admitted certified transition. Whether the declaration
+        is genuinely reachable in that transition's dependency closure is a
+        stronger question, and answering it is a downstream refinement (Phase F),
+        not something this tool pretends to have done.
+"""
+
+import argparse
+import hashlib
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+NCOL = 10
+COLUMNS = ("decl type_fp closure_fp source_commit consumer_obligation "
+           "consumer_state novelty_label episode_id created note").split()
+
+CONSUMER_STATES = ("certified", "live", "none", "-")
+
+NOVELTY_LABELS = ("-", "NOVELTY_UNASSESSED", "KNOWN_OR_FORMALIZATION", "CANDIDATE_NOVEL")
+
+EPISODE_NCOL = 8
+
+EXIT_OK = 0
+EXIT_REJECT = 20
+EXIT_MALFORMED = 30
+
+
+class Malformed(Exception):
+    """Schema or referential-integrity failure (exit 30)."""
+
+
+class Rejected(Exception):
+    """A precondition of this invocation failed (exit 20)."""
+
+
+# --------------------------------------------------------------------------
+# The episode log, read-only
+# --------------------------------------------------------------------------
+
+def read_episodes(path: Path):
+    """Return {episode_id: terminal outcome or None} for episodes with an OPEN row.
+
+    Deliberately a minimal reader. `crrg-episode` owns the episode log's rules;
+    duplicating them here would create a second opinion about what a valid log
+    is, and the two would drift. All this needs is which episodes exist and how
+    they ended.
+    """
+    if not path.is_file():
+        raise Malformed(f"no episode log at {path}")
+    episodes = {}
+    for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        fields = line.split("\t")
+        if len(fields) != EPISODE_NCOL:
+            raise Malformed(
+                f"episode log line {lineno}: wrong column count ({len(fields)}, "
+                f"expected {EPISODE_NCOL}). Fix the episode log with crrg-episode "
+                "before recording evidence against it."
+            )
+        kind, episode_id, payload = fields[0], fields[1], fields[4]
+        if kind == "OPEN":
+            episodes.setdefault(episode_id, None)
+        elif kind == "TERMINAL" and episode_id in episodes:
+            episodes[episode_id] = payload
+    return episodes
+
+
+def consumed(outcome) -> bool:
+    return bool(outcome) and outcome.startswith("admitted-")
+
+
+# --------------------------------------------------------------------------
+# The evidence log
+# --------------------------------------------------------------------------
+
+def check_token(name: str, value: str) -> str:
+    if value == "":
+        raise Malformed(f"{name} is empty; use '-' for an intentionally empty field")
+    if "\t" in value or "\n" in value or "\r" in value:
+        raise Malformed(f"{name} may not contain a tab or newline")
+    if any(c.isspace() for c in value):
+        raise Malformed(f"{name} {value!r} may not contain whitespace")
+    return value
+
+
+def check_required(name: str, value: str) -> str:
+    check_token(name, value)
+    if value == "-":
+        raise Malformed(
+            f"{name} is '-'. It is required: a record without it is not evidence "
+            "about anything in particular."
+        )
+    return value
+
+
+def validate_record(rec, where: str, episodes) -> None:
+    """Schema, then referential integrity. Raises Malformed.
+
+    `episodes is None` means "schema only" -- `view` prints records and does not
+    consult the episode log, so it must not fail on a reference it never read.
+    """
+    def field(name):
+        return rec[name]
+
+    try:
+        check_required("decl", field("decl"))
+        check_required("source_commit", field("source_commit"))
+        check_required("episode_id", field("episode_id"))
+        # Fingerprints are caller-supplied. `-` is the honest value for "not
+        # computed"; a fabricated one would be worse than a missing one, so the
+        # only thing enforced is that the field is a single token.
+        check_token("type_fp", field("type_fp"))
+        check_token("closure_fp", field("closure_fp"))
+        check_token("consumer_obligation", field("consumer_obligation"))
+        check_token("created", field("created"))
+        if field("consumer_state") not in CONSUMER_STATES:
+            raise Malformed(
+                f"unknown consumer_state {field('consumer_state')!r}; expected one of "
+                + " | ".join(CONSUMER_STATES)
+            )
+        if field("novelty_label") not in NOVELTY_LABELS:
+            raise Malformed(
+                f"unknown novelty_label {field('novelty_label')!r}; expected one of "
+                + " | ".join(NOVELTY_LABELS)
+            )
+    except Malformed as e:
+        raise Malformed(f"{where}: {e}") from None
+
+    if episodes is None:
+        return
+    if field("episode_id") not in episodes:
+        raise Malformed(
+            f"{where}: episode {field('episode_id')!r} is not in the episode log. An "
+            "evidence record is attached to an episode (§23, §25); a record pointing "
+            "at no episode is unattached evidence."
+        )
+
+
+def read_records(path: Path, episodes):
+    if not path.is_file():
+        raise Malformed(f"no evidence log at {path}")
+    records = []
+    for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        fields = line.split("\t")
+        if len(fields) != NCOL:
+            raise Malformed(
+                f"line {lineno}: wrong column count ({len(fields)}, expected {NCOL}). "
+                f"Columns are: {'  '.join(COLUMNS)}"
+            )
+        rec = dict(zip(COLUMNS, fields))
+        rec["_lineno"] = lineno
+        validate_record(rec, f"line {lineno}", episodes)
+        records.append(rec)
+    return records
+
+
+def clean_note(note: str) -> str:
+    note = note.replace("\t", " ").replace("\r", " ").replace("\n", " ").strip()
+    return note or "-"
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def append_row(path: Path, fields, before: str) -> None:
+    """Build beside the real file, verify, rename over. Same discipline as the
+    seal registry: a half-written log is never observable, and existing rows are
+    compared rather than trusted."""
+    original = path.read_text()
+    prefix = original if (not original or original.endswith("\n")) else original + "\n"
+    new_text = prefix + "\t".join(fields) + "\n"
+    tmp = path.with_name(f"{path.name}.new.{os.getpid()}")
+    try:
+        tmp.write_text(new_text)
+        if not tmp.read_text().startswith(original.rstrip("\n")):
+            raise Malformed("appending would have altered an existing row")
+        if digest(path) != before:
+            raise Malformed("the evidence log changed underneath this invocation")
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
+# --------------------------------------------------------------------------
+# Subcommands
+# --------------------------------------------------------------------------
+
+def cmd_record(args, records, episodes, path: Path, before: str) -> int:
+    if args.episode not in episodes:
+        raise Rejected(
+            f"episode {args.episode!r} is not in the episode log {args.episode_log}. "
+            "Open the episode with crrg-episode first; evidence is recorded against an "
+            "episode that exists (§23, §25)."
+        )
+
+    fields = [
+        args.decl,
+        args.type_fp,
+        args.closure_fp,
+        args.commit,
+        args.consumer,
+        args.consumer_state,
+        args.label,
+        args.episode,
+        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        clean_note(args.note),
+    ]
+    rec = dict(zip(COLUMNS, fields))
+    validate_record(rec, "new record", episodes)
+
+    append_row(path, fields, before)
+    print("appended:")
+    print("  " + "\t".join(fields))
+    print(f"recorded: evidence for {fields[0]} in episode {fields[7]}")
+    print(f"novelty-label: {fields[6]}  (metadata only; nothing is computed from it)")
+    return EXIT_OK
+
+
+def cmd_validate(args, records, episodes, _path, _before) -> int:
+    print("=== CRRG evidence log validation (§25) ===")
+    print(f"evidence log  {args.evidence_log}")
+    print(f"episode log   {args.episode_log}")
+    print(f"rows          {len(records)}")
+    print("")
+    print("evidence log OK")
+    return EXIT_OK
+
+
+def cmd_classify(args, records, episodes, _path, _before) -> int:
+    print("=== CRRG evidence classification (§25) ===")
+    print(f"evidence log  {args.evidence_log}")
+    print(f"episode log   {args.episode_log}")
+    print("")
+    print("NEW_DECLARATION / EXISTING_DECLARATION is log-local: it is the first or a")
+    print("later appearance of this (decl, type_fp) pair in THIS log. It is not a")
+    print("claim about mathematics, the literature, or the repository.")
+    print("")
+    print("CONSUMED_BY_CERTIFIED_TRANSITION means: recorded as evidence within an")
+    print("episode that terminated in an admitted certified transition. Whether the")
+    print("declaration is reachable in that transition's dependency closure is a")
+    print("downstream refinement, not this tool.")
+    print("")
+
+    order = []
+    grouped = {}
+    for rec in records:
+        key = (rec["decl"], rec["type_fp"])
+        if key not in grouped:
+            grouped[key] = []
+            order.append(key)
+        grouped[key].append(rec)
+
+    for decl, type_fp in order:
+        print(f"declaration {decl}")
+        print(f"  type-fingerprint: {type_fp}")
+        for position, rec in enumerate(grouped[(decl, type_fp)]):
+            outcome = episodes.get(rec["episode_id"])
+            print(f"  record at line {rec['_lineno']}  episode {rec['episode_id']}")
+            print("    " + ("NEW_DECLARATION" if position == 0 else "EXISTING_DECLARATION"))
+            print("    " + ("CONSUMED_BY_CERTIFIED_TRANSITION" if consumed(outcome)
+                            else "UNCONSUMED"))
+            print(f"    terminal-outcome: {outcome or '-'}")
+            print(f"    novelty-label: {rec['novelty_label']}  (not used above)")
+        print("")
+    return EXIT_OK
+
+
+def cmd_view(args, records, _episodes, _path, _before) -> int:
+    print("=== CRRG evidence records (§25) ===")
+    print(f"evidence log  {args.evidence_log}")
+    print("")
+    print("Evidence for a later novelty-research programme (§26, R1). Not a")
+    print("measurement, not a ranking, not a research result.")
+    print("")
+
+    by_decl = {}
+    for rec in records:
+        by_decl.setdefault(rec["decl"], []).append(rec)
+
+    for decl in sorted(by_decl):
+        print(f"declaration {decl}")
+        for rec in by_decl[decl]:
+            print(f"  record at line {rec['_lineno']}")
+            print(f"    type-fingerprint: {rec['type_fp']}")
+            print(f"    closure-fingerprint: {rec['closure_fp']}")
+            print(f"    source-commit: {rec['source_commit']}")
+            print(f"    consumer-obligation: {rec['consumer_obligation']}")
+            print(f"    consumer-state: {rec['consumer_state']}")
+            print(f"    novelty-label: {rec['novelty_label']}")
+            print(f"    episode: {rec['episode_id']}")
+            print(f"    created: {rec['created']}")
+            print(f"    note: {rec['note']}")
+        print("")
+    return EXIT_OK
+
+
+COMMANDS = {
+    "record": cmd_record,
+    "classify": cmd_classify,
+    "view": cmd_view,
+    "validate": cmd_validate,
+}
+
+
+VALUE_OPTIONS = {
+    "--decl", "--commit", "--episode", "--type-fp", "--closure-fp",
+    "--consumer", "--consumer-state", "--label",
+}
+
+
+def split_trailing_note(argv):
+    """Lift `record`'s trailing positional note out of argv.
+
+    §2 documents `record <evidence-log> <episode-log> --decl D ... [note]`, with
+    the note last. argparse matches positionals within the first contiguous run
+    of non-option tokens, so it cannot see a positional that comes *after*
+    value-bearing flags -- it reports the note as an unrecognized argument. The
+    call shape is the specified one, so it is argv that gets adjusted here, not
+    the interface.
+
+    Walks argv, skipping each option and its value, and treats a third
+    positional as the note. Two positionals (the two logs) means no note; four
+    or more still reaches argparse and still errors.
+    """
+    if not argv or argv[0] != "record":
+        return argv, None
+    positions = []
+    i = 1
+    while i < len(argv):
+        tok = argv[i]
+        if tok in ("-h", "--help"):
+            return argv, None
+        if tok.startswith("--"):
+            i += 1 if ("=" in tok or tok not in VALUE_OPTIONS) else 2
+        else:
+            positions.append(i)
+            i += 1
+    if len(positions) < 3:
+        return argv, None
+    idx = positions[2]
+    return argv[:idx] + argv[idx + 1:], argv[idx]
+
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        prog="crrg-evidence",
+        description="Append-only novelty evidence log (Spec §25). Records evidence; "
+                    "measures nothing.",
+    )
+    sub = ap.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("record")
+    p.add_argument("evidence_log")
+    p.add_argument("episode_log")
+    p.add_argument("--decl", required=True, help="exact Lean declaration name")
+    p.add_argument("--commit", required=True, help="source commit")
+    p.add_argument("--episode", required=True, help="episode id, present in the episode log")
+    p.add_argument("--type-fp", dest="type_fp", default="-",
+                   help="caller-supplied type fingerprint; '-' when not computed")
+    p.add_argument("--closure-fp", dest="closure_fp", default="-",
+                   help="caller-supplied dependency-closure fingerprint; '-' when not computed")
+    p.add_argument("--consumer", default="-", help="intended consumer obligation id")
+    p.add_argument("--consumer-state", dest="consumer_state", default="-",
+                   choices=CONSUMER_STATES)
+    p.add_argument("--label", default="-", choices=NOVELTY_LABELS,
+                   help="metadata only; nothing is computed from it")
+    p.add_argument("note", nargs="?", default="-")
+
+    p = sub.add_parser("classify")
+    p.add_argument("evidence_log")
+    p.add_argument("episode_log")
+
+    p = sub.add_parser("view")
+    p.add_argument("evidence_log")
+
+    p = sub.add_parser("validate")
+    p.add_argument("evidence_log")
+    p.add_argument("episode_log")
+    return ap
+
+
+def main() -> int:
+    argv, trailing_note = split_trailing_note(sys.argv[1:])
+    args = build_parser().parse_args(argv)
+    if trailing_note is not None:
+        args.note = trailing_note
+    path = Path(args.evidence_log)
+    before = None
+    try:
+        if not path.is_file():
+            raise Malformed(
+                f"no evidence log at {path}. Create it first, e.g. "
+                "`printf '# CRRG evidence log\\n' > <evidence-log>`."
+            )
+        before = digest(path)
+
+        # `view` is the one subcommand that does not consult the episode log:
+        # it prints records, and consumption is not a property of a record alone.
+        # `None` therefore means "schema only", not "no episodes exist" -- the
+        # difference matters, because the latter would reject every row.
+        episodes = None if args.command == "view" else read_episodes(Path(args.episode_log))
+        records = read_records(path, episodes)
+
+        return COMMANDS[args.command](args, records, episodes, path, before)
+
+    except Rejected as e:
+        print(f"EVIDENCE RECORD REJECTED: {e}", file=sys.stderr)
+        return untouched_or_worse(path, before, EXIT_REJECT)
+    except Malformed as e:
+        print(f"EVIDENCE LOG MALFORMED: {e}", file=sys.stderr)
+        return untouched_or_worse(path, before, EXIT_MALFORMED)
+
+
+def untouched_or_worse(path: Path, before, code: int) -> int:
+    if before is not None and path.is_file() and digest(path) != before:
+        print("crrg-evidence: INTERNAL ERROR — the evidence log changed on a failing path",
+              file=sys.stderr)
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

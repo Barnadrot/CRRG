@@ -721,6 +721,126 @@ expect reject "seal hash not present in the seal registry" \
 
 
 echo ""
+echo "crrg-evidence (novelty evidence substrate, Spec §25):"
+
+# §25 records evidence and measures nothing. The cases below check the two
+# mechanical classifications, that the optional novelty label feeds neither of
+# them, and -- the point of the substrate -- that recording evidence cannot move
+# certified or orchestration state.
+EV="$SCRIPT_DIR/crrg-evidence"
+EVD="$TMPDIR_SELFTEST/evidence"
+mkdir -p "$EVD"
+
+EVEP="$EVD/episodes.tsv"
+printf '# CRRG episode log\n' > "$EVEP"
+"$EP" open "$EVEP" v1 OBL-E mech-e gen-1 >/dev/null 2>&1
+"$EP" terminal "$EVEP" v1 admitted-refined >/dev/null 2>&1
+"$EP" open "$EVEP" v2 OBL-E mech-e gen-2 >/dev/null 2>&1
+"$EP" terminal "$EVEP" v2 noTransition >/dev/null 2>&1
+
+EVLOG="$EVD/evidence.tsv"
+printf '# CRRG evidence log\n' > "$EVLOG"
+
+ev_code() { "$EV" "$@" >/dev/null 2>&1; echo "exit=$?"; }
+
+expect ok "recorded: evidence for CRRG.Helper.lemma" \
+  "records evidence for a declaration against an existing episode" \
+  "$EV" record "$EVLOG" "$EVEP" --decl CRRG.Helper.lemma --commit c0ffee \
+  --episode v1 --type-fp tfp-1 --label CANDIDATE_NOVEL "a helper theorem"
+
+# An unknown episode is this invocation's own precondition failing, so 20 --
+# the same split ratified for crrg-episode respond in Phase D.
+expect ok "exit=20" \
+  "refuses evidence against an episode that is not in the episode log (exit 20)" \
+  ev_code record "$EVLOG" "$EVEP" --decl CRRG.Ghost --commit c0ffee --episode v404
+
+expect ok "NEW_DECLARATION" \
+  "the first record of a (decl, type_fp) classifies NEW_DECLARATION" \
+  "$EV" classify "$EVLOG" "$EVEP"
+
+# Episode v1 terminated admitted-refined, so evidence recorded inside it was
+# consumed by a certified transition; v2 terminated noTransition, so it was not.
+expect ok "CONSUMED_BY_CERTIFIED_TRANSITION" \
+  "evidence in an episode that terminated admitted-refined is CONSUMED" \
+  "$EV" classify "$EVLOG" "$EVEP"
+
+"$EV" record "$EVLOG" "$EVEP" --decl CRRG.Helper.lemma --commit c0ffee \
+  --episode v2 --type-fp tfp-1 >/dev/null 2>&1
+expect ok "EXISTING_DECLARATION" \
+  "re-recording the same (decl, type_fp) classifies EXISTING_DECLARATION" \
+  "$EV" classify "$EVLOG" "$EVEP"
+
+expect ok "UNCONSUMED" \
+  "evidence in an episode that terminated noTransition is UNCONSUMED" \
+  "$EV" classify "$EVLOG" "$EVEP"
+
+# The label is metadata (§25): stored, printed back, and computed from by
+# nothing. Two logs identical except for the label column must classify
+# identically once the label lines themselves are removed.
+LBLA="$EVD/label-a.tsv"; LBLB="$EVD/label-b.tsv"
+printf '# CRRG evidence log\n' > "$LBLA"
+printf '# CRRG evidence log\n' > "$LBLB"
+"$EV" record "$LBLA" "$EVEP" --decl CRRG.Same --commit c0ffee --episode v1 \
+  --type-fp tfp-2 --label CANDIDATE_NOVEL >/dev/null 2>&1
+"$EV" record "$LBLB" "$EVEP" --decl CRRG.Same --commit c0ffee --episode v1 \
+  --type-fp tfp-2 --label KNOWN_OR_FORMALIZATION >/dev/null 2>&1
+ev_label_inert() {
+  local a b
+  a="$("$EV" classify "$LBLA" "$EVEP" 2>&1 | grep -vE 'novelty-label:|evidence log')"
+  b="$("$EV" classify "$LBLB" "$EVEP" 2>&1 | grep -vE 'novelty-label:|evidence log')"
+  if [ "$a" = "$b" ]; then echo "classification independent of novelty label"
+  else echo "LABEL CHANGED THE CLASSIFICATION"; fi
+  "$EV" view "$LBLA" 2>&1 | grep -F 'novelty-label: CANDIDATE_NOVEL' >/dev/null \
+    && echo "label stored and printed" || echo "LABEL NOT STORED"
+}
+expect ok "classification independent of novelty label" \
+  "a novelty label is stored and printed but changes no classification (§25)" \
+  ev_label_inert
+
+expect ok "label stored and printed" \
+  "  ...and the label is still recorded and shown by view" ev_label_inert
+
+# THE ISOLATION PROPERTY. §25: evidence records cannot mutate the root, the
+# frontier, candidate truth state, project reward, or the stall count. Here that
+# is checked where it is checkable: after a sequence of evidence operations
+# including a failing one, the episode log is byte-identical and the stall
+# state crrg-episode reports is unchanged.
+EV_EP_BEFORE="$(sha256sum "$EVEP" | cut -d' ' -f1)"
+EV_ST_BEFORE="$("$EP" status "$EVEP" 2>&1)"
+"$EV" record "$EVLOG" "$EVEP" --decl CRRG.More --commit c0ffee --episode v2 >/dev/null 2>&1
+"$EV" classify "$EVLOG" "$EVEP" >/dev/null 2>&1
+"$EV" view "$EVLOG" >/dev/null 2>&1
+"$EV" validate "$EVLOG" "$EVEP" >/dev/null 2>&1
+"$EV" record "$EVLOG" "$EVEP" --decl CRRG.Ghost --commit c0ffee --episode v404 >/dev/null 2>&1
+EV_EP_AFTER="$(sha256sum "$EVEP" | cut -d' ' -f1)"
+EV_ST_AFTER="$("$EP" status "$EVEP" 2>&1)"
+ev_isolated() {
+  if [ "$EV_EP_BEFORE" != "$EV_EP_AFTER" ]; then echo "EPISODE LOG MUTATED BY EVIDENCE"
+  elif [ "$EV_ST_BEFORE" != "$EV_ST_AFTER" ]; then echo "STALL STATE MOVED BY EVIDENCE"
+  else echo "episode log and stall state untouched by evidence"; fi
+}
+expect ok "episode log and stall state untouched by evidence" \
+  "recording evidence moves no certified or orchestration state (§25)" ev_isolated
+
+ev_deterministic() {
+  local a b
+  a="$("$EV" view "$EVLOG" 2>&1)"
+  b="$("$EV" view "$EVLOG" 2>&1)"
+  if [ "$a" = "$b" ]; then echo "view byte-identical across runs"
+  else echo "VIEW NONDETERMINISTIC"; fi
+}
+expect ok "view byte-identical across runs" \
+  "the evidence view is deterministic -- same input, same bytes" ev_deterministic
+
+EVBAD="$EVD/corrupt.tsv"
+cp "$EVLOG" "$EVBAD"
+printf 'only\ttwo\n' >> "$EVBAD"
+expect ok "exit=30" \
+  "a corrupted evidence row fails the next invocation loudly (exit 30)" \
+  ev_code validate "$EVBAD" "$EVEP"
+
+
+echo ""
 if [ "$fail" -ne 0 ]; then
   echo "=== CRRG gate self-tests FAILED ($fail of $((pass + fail))) ==="
   exit 1
