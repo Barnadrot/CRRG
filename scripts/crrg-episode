@@ -65,6 +65,11 @@ The same-mechanism rejection is deliberately *immediate only*: it fires against
 the next launch after a stall response, and is spent by that launch. Durable
 anti-circling across a long history is deferred research (§26 R2), not something
 this script pretends to enforce.
+
+`open` and `may-launch` consult one guard (`launch_refusal`): `may-launch`
+reports it, `open` enforces it. Opening an episode is launching research, so a
+blocked obligation, or the mechanism that stalled it, is refused at `open` rather
+than merely reported to a caller who is free to ignore the answer.
 """
 
 import argparse
@@ -416,34 +421,58 @@ def cmd_status(args, _rows, obligations) -> int:
     return EXIT_OK
 
 
+def launch_refusal(st, obligation_id: str, mechanism_id: str, threshold: int):
+    """The §22 launch guard. Returns a reason string, or None to permit.
+
+    One implementation, shared by `may-launch` (which reports it) and `open`
+    (which enforces it). A guard that answers one way when asked and another way
+    when acted on is not a guard.
+    """
+    if st["blocked"]:
+        return (
+            f"stalled: response required for obligation {obligation_id!r} "
+            f"(no-transition count {st['count']}, threshold {threshold}). "
+            "Record one of: " + " | ".join(RESPONSES)
+        )
+    if st["armed"] is not None and st["armed"] == mechanism_id:
+        return (
+            f"same mechanism immediately after stall: {mechanism_id!r} is the "
+            f"mechanism that stalled obligation {obligation_id!r}. Continue under a "
+            "different recorded mechanism, or record an ownerOverride (§22)."
+        )
+    return None
+
+
 def cmd_may_launch(args, _rows, obligations) -> int:
     st = obligations.get(args.obligation_id) or new_obligation_state()
-    if st["blocked"]:
-        print(
-            f"MAY-LAUNCH REJECTED: stalled: response required for obligation "
-            f"{args.obligation_id!r} (no-transition count {st['count']}, threshold "
-            f"{args.threshold}). Record one of: " + " | ".join(RESPONSES),
-            file=sys.stderr,
-        )
-        return EXIT_REJECT
-    if st["armed"] is not None and st["armed"] == args.mechanism_id:
-        print(
-            f"MAY-LAUNCH REJECTED: same mechanism immediately after stall: "
-            f"{args.mechanism_id!r} is the mechanism that stalled obligation "
-            f"{args.obligation_id!r}. Continue under a different recorded mechanism, "
-            "or record an ownerOverride (§22).",
-            file=sys.stderr,
-        )
+    reason = launch_refusal(st, args.obligation_id, args.mechanism_id, args.threshold)
+    if reason is not None:
+        print(f"MAY-LAUNCH REJECTED: {reason}", file=sys.stderr)
         return EXIT_REJECT
     print(f"may-launch: allowed  obligation {args.obligation_id}  mechanism {args.mechanism_id}")
     return EXIT_OK
 
 
-def cmd_open(args, _rows, _obligations, before: str):
+def cmd_open(args, _rows, obligations, before: str):
     check_id("episode_id", args.episode_id)
     check_id("obligation_id", args.obligation_id)
     check_id("mechanism_id", args.mechanism_id)
     check_field("start_ref", args.start_ref)
+
+    # §22: "a stall response is mandatory before another research episode may
+    # launch on that obligation." Opening an episode IS launching research, so
+    # the guard `may-launch` reports is enforced here rather than left advisory.
+    #
+    # There is deliberately no override flag. The override path is the already
+    # recorded `ownerOverride` RESPONSE, which unblocks without arming, so an
+    # override is a row in the append-only log that an auditor can see -- not a
+    # command-line argument that leaves no trace.
+    st = obligations.get(args.obligation_id) or new_obligation_state()
+    reason = launch_refusal(st, args.obligation_id, args.mechanism_id, args.threshold)
+    if reason is not None:
+        print(f"EPISODE OPEN REJECTED: {reason}", file=sys.stderr)
+        sys.exit(EXIT_REJECT)
+
     return ["OPEN", args.episode_id, args.obligation_id, args.mechanism_id,
             args.start_ref, head_commit(), now_utc(), clean_note(args.note)]
 

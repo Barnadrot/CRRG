@@ -635,6 +635,31 @@ expect reject "wrong column count" \
   "a corrupted row fails the next invocation loudly instead of being skipped" \
   "$EP" checkpoint "$CORRUPT" c1 ref-z
 
+# §22 says a stall response is mandatory before another episode may LAUNCH, and
+# opening an episode is launching. So `open` enforces the same guard `may-launch`
+# reports, rather than leaving it advisory for a caller free to ignore it. The
+# override is the recorded ownerOverride RESPONSE -- a row an auditor can see,
+# not a flag that leaves no trace.
+BLOCKED="$EPD/open-blocked.tsv"
+seed_stall "$BLOCKED" mech-a
+expect reject "stalled: response required" \
+  "open refuses a blocked obligation, not just may-launch" \
+  "$EP" open "$BLOCKED" e9 OBL-S mech-a gen-9
+
+# $STALL is unblocked by the earlier newMechanism response, with mech-a armed.
+expect reject "same mechanism immediately after stall" \
+  "open refuses the mechanism that stalled, after a non-override response" \
+  "$EP" open "$STALL" e9 OBL-S mech-a gen-9
+
+expect ok "recorded: OPEN" \
+  "open accepts a different mechanism after a newMechanism response" \
+  "$EP" open "$STALL" e9 OBL-S mech-b gen-9
+
+# $OVR was cleared by ownerOverride, which unblocks without arming.
+expect ok "recorded: OPEN" \
+  "open accepts the same mechanism after an ownerOverride response" \
+  "$EP" open "$OVR" f9 OBL-S mech-a gen-9
+
 
 echo ""
 echo "crrg-mechanism (mechanism records, Spec §24):"
