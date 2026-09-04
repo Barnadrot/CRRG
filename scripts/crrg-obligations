@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+"""The §21 scheduler view: unique live obligations, and which positions share one.
+
+Usage:
+    crrg-obligations view  <seal-registry> <task-map>
+    crrg-obligations check <seal-registry> <task-map>
+
+Inputs
+------
+The seal registry written by `crrg-register-candidate` -- TSV, `#` comments,
+eight columns:
+
+    ID  DECL  HASH  COMMIT  CREATED  EXPECTED_THM  TARGET_ID  SOURCE_IDS
+
+and a task map supplied by the caller -- TSV, `#` comments, two columns:
+
+    position_id  seal_hash
+
+CANONICAL OBLIGATION IDENTITY IS THE SEAL HASH
+----------------------------------------------
+Column 3 of the seal registry, and nothing else. It is derived deterministically
+from the semantic seal (§5.3, §21), so two positions carrying the same exact
+sealed proposition necessarily carry the same identity, and no naming choice can
+make them differ.
+
+It is deliberately *not* the candidate id, the target id, the declaration name, a
+generation number, or any free text. Those are display and provenance. A live
+deployment produced exactly this failure: two frontier positions carrying one
+proposition under two ids, researched twice. The registry ids are printed here
+as provenance, plainly labeled, because an operator needs to find the row -- but
+the obligation is the hash.
+
+WHAT THIS DOES NOT DO
+---------------------
+It does not decide which obligation to work on, does not rank obligations, and
+prints no score, count, or aggregate of any kind (§1, §19.3). `DUPLICATE` is a
+structural fact about the task map, not a judgement about the research.
+
+Output is deterministic: blocks sorted by hash, positions and ids sorted within
+a block, so the same inputs give byte-identical output.
+"""
+
+import argparse
+import sys
+from pathlib import Path
+
+EXIT_OK = 0
+EXIT_REJECT = 20
+EXIT_MALFORMED = 30
+
+SEAL_NCOL = 8
+TASKMAP_NCOL = 2
+
+
+class Malformed(Exception):
+    """An input file is not well formed (exit 30)."""
+
+
+def read_tsv(path: Path, ncol: int, what: str):
+    if not path.is_file():
+        raise Malformed(f"no {what} at {path}")
+    rows = []
+    for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        fields = line.split("\t")
+        if len(fields) != ncol:
+            raise Malformed(
+                f"{what} line {lineno}: wrong column count ({len(fields)}, expected "
+                f"{ncol})"
+            )
+        rows.append((lineno, fields))
+    return rows
+
+
+def load(seal_path: Path, task_path: Path):
+    """Return (hash -> sorted registry ids, hash -> sorted positions, task rows)."""
+    ids_by_hash = {}
+    for _lineno, f in read_tsv(seal_path, SEAL_NCOL, "seal registry"):
+        ids_by_hash.setdefault(f[2], set()).add(f[0])
+
+    positions_by_hash = {}
+    task_rows = []
+    for lineno, f in read_tsv(task_path, TASKMAP_NCOL, "task map"):
+        position, seal_hash = f[0], f[1]
+        positions_by_hash.setdefault(seal_hash, set()).add(position)
+        task_rows.append((lineno, position, seal_hash))
+
+    return ids_by_hash, positions_by_hash, task_rows
+
+
+def cmd_view(args) -> int:
+    ids_by_hash, positions_by_hash, _rows = load(Path(args.seal_registry), Path(args.task_map))
+
+    print("=== CRRG unique live obligations (§21) ===")
+    print(f"seal registry  {args.seal_registry}")
+    print(f"task map       {args.task_map}")
+    print("")
+    print("Canonical obligation identity is the seal hash. Registry ids are")
+    print("provenance, not identity.")
+    print("")
+
+    for seal_hash in sorted(positions_by_hash):
+        positions = sorted(positions_by_hash[seal_hash])
+        registry_ids = sorted(ids_by_hash.get(seal_hash, ()))
+        print(f"obligation {seal_hash}")
+        print(f"  registry-ids: {', '.join(registry_ids) if registry_ids else '-'}")
+        print(f"  positions: {', '.join(positions)}")
+        if len(positions) > 1:
+            print("  DUPLICATE: these positions are one research obligation; a proof of")
+            print("  this proposition discharges every one of them.")
+        print("")
+    return EXIT_OK
+
+
+def cmd_check(args) -> int:
+    ids_by_hash, _positions, task_rows = load(Path(args.seal_registry), Path(args.task_map))
+
+    print("=== CRRG obligation referential integrity (§21) ===")
+    print(f"seal registry  {args.seal_registry}")
+    print(f"task map       {args.task_map}")
+    print("")
+
+    unknown = [(lineno, position, seal_hash)
+               for lineno, position, seal_hash in task_rows
+               if seal_hash not in ids_by_hash]
+    if unknown:
+        print("TASK MAP REJECTED: seal hash not present in the seal registry.",
+              file=sys.stderr)
+        print("  A position whose obligation is not sealed is not schedulable: there",
+              file=sys.stderr)
+        print("  is no canonical identity for it, only a name.", file=sys.stderr)
+        for lineno, position, seal_hash in unknown:
+            print(f"    line {lineno}: {position}\t{seal_hash}", file=sys.stderr)
+        return EXIT_REJECT
+
+    print("every task-map position resolves to a sealed obligation")
+    return EXIT_OK
+
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        prog="crrg-obligations",
+        description="Unique live obligations, keyed by seal hash (Spec §21)",
+    )
+    sub = ap.add_subparsers(dest="command", required=True)
+    for name in ("view", "check"):
+        p = sub.add_parser(name)
+        p.add_argument("seal_registry")
+        p.add_argument("task_map")
+    return ap
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    try:
+        return {"view": cmd_view, "check": cmd_check}[args.command](args)
+    except Malformed as e:
+        print(f"OBLIGATION VIEW MALFORMED: {e}", file=sys.stderr)
+        return EXIT_MALFORMED
+
+
+if __name__ == "__main__":
+    sys.exit(main())

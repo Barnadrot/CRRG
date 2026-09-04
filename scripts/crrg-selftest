@@ -508,6 +508,219 @@ expect reject "exactly one classification is required" \
   "rejects two classifications -- two is no classification" dcheck "$DC/two.txt"
 
 echo ""
+echo "crrg-episode (research episodes and stall replay, Spec §22, §23):"
+
+# The stall replay here is a MIRROR of CRRG/CRRG/Stall.lean, not a second
+# opinion, so these cases are the enumerated Lean regressions run through the
+# tool: five no-transitions block, a response clears, an admitted terminal
+# resets, checkpoints and integrity events are inert.
+EP="$SCRIPT_DIR/crrg-episode"
+EPD="$TMPDIR_SELFTEST/episode"
+mkdir -p "$EPD"
+
+# Exit codes are part of this tool's contract (§19.2): a terminal no-transition
+# has to be distinguishable from an admitted transition and from a rejection by
+# exit code alone. A test that only asked "did it fail" would not notice a 10
+# that had silently become a 30, which is the whole point of the four codes.
+ep_code() { "$EP" "$@" >/dev/null 2>&1; echo "exit=$?"; }
+
+# Five terminal no-transitions on one obligation under one mechanism.
+seed_stall() {
+  local log="$1" mech="$2" i
+  printf '# CRRG episode log\n' > "$log"
+  for i in 1 2 3 4 5; do
+    "$EP" open "$log" "e$i" OBL-S "$mech" "gen-$i" >/dev/null 2>&1
+    "$EP" terminal "$log" "e$i" noTransition >/dev/null 2>&1
+  done
+}
+
+HAPPY="$EPD/happy.tsv"
+printf '# CRRG episode log\n' > "$HAPPY"
+
+expect ok "recorded: OPEN" \
+  "opens an episode against one obligation and one mechanism" \
+  "$EP" open "$HAPPY" e1 OBL-A mech-a gen-3 "first attempt"
+
+expect ok "recorded: CHECKPOINT" \
+  "records a checkpoint against the open episode" \
+  "$EP" checkpoint "$HAPPY" e1 lemma-42 "helper theorem"
+
+expect ok "exit=0" \
+  "an admitted terminal closes the episode and exits 0" \
+  ep_code terminal "$HAPPY" e1 admitted-refined
+
+expect reject "episode 'e1' is closed" \
+  "refuses a second terminal on a closed episode -- exactly one per episode" \
+  "$EP" terminal "$HAPPY" e1 noTransition
+
+# A rejected append must leave the file byte-identical, and asserting that is not
+# the same as checking it. Added beyond the tasking's list for the same reason
+# crrg-register-candidate carries the equivalent case: the property §2 requires
+# is the one an append-only tool is most likely to break silently.
+HAPPY_BEFORE="$(sha256sum "$HAPPY" | cut -d' ' -f1)"
+"$EP" terminal "$HAPPY" e1 noTransition >/dev/null 2>&1
+HAPPY_AFTER="$(sha256sum "$HAPPY" | cut -d' ' -f1)"
+ep_untouched() {
+  if [ "$HAPPY_BEFORE" = "$HAPPY_AFTER" ]; then echo "log byte-identical"
+  else echo "LOG MUTATED ON A FAILING PATH"; fi
+}
+expect ok "log byte-identical" \
+  "  ...and left the log byte-identical: rejected second terminal" ep_untouched
+
+NT="$EPD/notransition.tsv"
+printf '# CRRG episode log\n' > "$NT"
+"$EP" open "$NT" n1 OBL-N mech-n gen-1 >/dev/null 2>&1
+expect ok "exit=10" \
+  "a terminal noTransition exits 10 -- valid, and not a certified transition (§19.2)" \
+  ep_code terminal "$NT" n1 noTransition
+
+expect reject "is not blocked" \
+  "refuses a stall response on an obligation that is not blocked" \
+  "$EP" respond "$NT" OBL-N reselect
+
+STALL="$EPD/stall.tsv"
+seed_stall "$STALL" mech-a
+
+expect ok "no-transition-count: 5" \
+  "counts five terminal no-transitions on one obligation" \
+  "$EP" status "$STALL" OBL-S
+
+expect ok "blocked: yes" \
+  "the fifth no-transition blocks the obligation at threshold 5" \
+  "$EP" status "$STALL" OBL-S
+
+expect reject "stalled: response required" \
+  "may-launch refuses a blocked obligation" \
+  "$EP" may-launch "$STALL" OBL-S mech-a
+
+expect ok "recorded: RESPONSE newMechanism" \
+  "records a stall response against the blocked obligation" \
+  "$EP" respond "$STALL" OBL-S newMechanism
+
+expect ok "may-launch: allowed" \
+  "may-launch allows a different mechanism once a response is recorded" \
+  "$EP" may-launch "$STALL" OBL-S mech-b
+
+# §22: immediate relaunch of the same stalled obligation under the same recorded
+# mechanism is rejected. Immediate-only by design -- durable anti-circling is
+# deferred research (§26 R2), not enforcement.
+expect reject "same mechanism immediately after stall" \
+  "may-launch still refuses the mechanism that stalled, after that response" \
+  "$EP" may-launch "$STALL" OBL-S mech-a
+
+OVR="$EPD/override.tsv"
+seed_stall "$OVR" mech-a
+expect ok "recorded: RESPONSE ownerOverride" \
+  "records an owner override against the blocked obligation" \
+  "$EP" respond "$OVR" OBL-S ownerOverride
+
+expect ok "may-launch: allowed" \
+  "an owner override permits the same mechanism -- explicit operator decision (§22)" \
+  "$EP" may-launch "$OVR" OBL-S mech-a
+
+# §23: a checkpoint is append-only evidence. It does not close the episode and
+# does not touch the detector.
+CPL="$EPD/checkpoints.tsv"
+printf '# CRRG episode log\n' > "$CPL"
+"$EP" open "$CPL" c1 OBL-C mech-c gen-1 >/dev/null 2>&1
+for r in a b c d e f; do "$EP" checkpoint "$CPL" c1 "ref-$r" >/dev/null 2>&1; done
+expect ok "no-transition-count: 0" \
+  "six checkpoints do not increment the stall count" \
+  "$EP" status "$CPL" OBL-C
+
+CORRUPT="$EPD/corrupt.tsv"
+cp "$CPL" "$CORRUPT"
+printf 'OPEN\tbroken-row\n' >> "$CORRUPT"
+expect reject "wrong column count" \
+  "a corrupted row fails the next invocation loudly instead of being skipped" \
+  "$EP" checkpoint "$CORRUPT" c1 ref-z
+
+
+echo ""
+echo "crrg-mechanism (mechanism records, Spec §24):"
+
+MECH="$SCRIPT_DIR/crrg-mechanism"
+MD="$TMPDIR_SELFTEST/mechanism"
+mkdir -p "$MD"
+MREG="$MD/registry.tsv"
+printf '# CRRG mechanism registry\n' > "$MREG"
+
+mech_fp_stable() {
+  local a b
+  a="$("$MECH" fingerprint "$MREG" mech-a 2>&1)"
+  b="$("$MECH" fingerprint "$MREG" mech-a 2>&1)"
+  if [ "$a" = "$b" ] && [ ${#a} -eq 64 ]; then echo "fingerprint stable: $a"
+  else echo "FINGERPRINT UNSTABLE: $a vs $b"; fi
+}
+
+# A check that cannot run must never be reported as a check that passed. This is
+# the quiet failure mode the whole self-test suite exists for, so the exit code
+# is pinned exactly rather than merely required to be non-zero.
+mech_unconfigured() {
+  env -u CRRG_WORKDIR -u CRRG_IMPORTS \
+    "$MECH" resolve-check "$MREG" mech-a 2>&1 | sed 's/^/    /'
+  echo "unconfigured-exit=${PIPESTATUS[0]}"
+}
+
+expect ok "fingerprint:" \
+  "registers a mechanism with a declared basis and prints its fingerprint" \
+  "$MECH" register "$MREG" mech-a OBL-A route-7 CRRG.Edge.id,CRRG.Edge.trans - "first"
+
+expect ok "fingerprint stable:" \
+  "the fingerprint is deterministic across invocations" mech_fp_stable
+
+expect reject "never silently mutated" \
+  "refuses to re-register a mechanism id with different contents (§24)" \
+  "$MECH" register "$MREG" mech-a OBL-A route-9 CRRG.Edge.id - "retarget"
+
+expect ok "unconfigured-exit=30" \
+  "resolve-check with no configured environment exits 30, never a silent pass" \
+  mech_unconfigured
+
+
+echo ""
+echo "crrg-obligations (unique live obligations, Spec §21):"
+
+OBLI="$SCRIPT_DIR/crrg-obligations"
+OD="$TMPDIR_SELFTEST/obligations"
+mkdir -p "$OD"
+
+# Two candidate ids carrying one sealed proposition: the L016/L017 shape this
+# view exists to catch. Identity is the seal hash, not the id.
+{
+  printf '# seal registry\n'
+  printf 'L016\tD.left\thash-aaa\tc0\t2026-01-01T00:00:00Z\t-\tL016\t-\n'
+  printf 'L017\tD.right\thash-aaa\tc0\t2026-01-01T00:00:00Z\t-\tL017\t-\n'
+  printf 'L020\tD.other\thash-bbb\tc0\t2026-01-01T00:00:00Z\t-\tL020\t-\n'
+} > "$OD/seals.tsv"
+printf '# task map\np1\thash-aaa\np2\thash-aaa\np3\thash-bbb\n' > "$OD/tasks.tsv"
+
+obl_deterministic() {
+  local a b
+  a="$("$OBLI" view "$OD/seals.tsv" "$OD/tasks.tsv" 2>&1)"
+  b="$("$OBLI" view "$OD/seals.tsv" "$OD/tasks.tsv" 2>&1)"
+  if [ "$a" = "$b" ]; then echo "view byte-identical across runs"
+  else echo "VIEW NONDETERMINISTIC"; fi
+}
+
+expect ok "DUPLICATE" \
+  "flags two positions carrying one sealed proposition as a single obligation" \
+  "$OBLI" view "$OD/seals.tsv" "$OD/tasks.tsv"
+
+expect ok "every task-map position resolves to a sealed obligation" \
+  "accepts a task map whose hashes are all present in the registry" \
+  "$OBLI" check "$OD/seals.tsv" "$OD/tasks.tsv"
+
+expect ok "view byte-identical across runs" \
+  "the view is deterministic -- same inputs, same bytes" obl_deterministic
+
+printf 'p9\thash-zzz\n' >> "$OD/tasks.tsv"
+expect reject "seal hash not present in the seal registry" \
+  "rejects a task-map position whose obligation is not sealed" \
+  "$OBLI" check "$OD/seals.tsv" "$OD/tasks.tsv"
+
+
+echo ""
 if [ "$fail" -ne 0 ]; then
   echo "=== CRRG gate self-tests FAILED ($fail of $((pass + fail))) ==="
   exit 1

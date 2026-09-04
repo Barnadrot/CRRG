@@ -1,0 +1,374 @@
+#!/usr/bin/env python3
+"""Append-only mechanism record registry (Spec §24).
+
+Usage:
+    crrg-mechanism register      <registry> <mechanism_id> <obligation_id>
+                                 <anchor_ref> <basis_decls> [candidate_ids] [note]
+    crrg-mechanism fingerprint   <registry> <mechanism_id>
+    crrg-mechanism resolve-check <registry> <mechanism_id>
+
+The registry is TSV with seven fixed columns, `#` comment lines allowed:
+
+    mechanism_id  obligation_id  anchor_ref  basis_decls  candidate_ids  created  note
+
+`basis_decls` is a comma-separated list of exact Lean declaration names and may
+not be empty: a mechanism record without a declared basis is not a record, it is
+a label. `candidate_ids` is comma-separated or `-`.
+
+WHAT A FINGERPRINT MEANS
+------------------------
+Exactly one thing: *the researcher declared this as the same recorded mechanism*
+(§24). It is a hash of the record's identifying fields, nothing more.
+
+It is not a similarity measure, not a novelty score, and not evidence that two
+mechanisms are mathematically the same or different. Semantic mechanism
+equivalence is unsolved in v0.9 and is deferred research (§26 R2). No heuristic
+embedding or similarity score enters this trust boundary, and none should be
+added here later: the value of this substrate is precisely that it claims so
+little.
+
+The `note` column is excluded from the fingerprint, because prose is not
+identity. That cuts both ways and both are deliberate: rewording a note does not
+mint a new mechanism, and rewording a note cannot silently mutate an existing
+record into a different one either -- §24 requires that new prose alone must not
+change a record, and the registry is append-only, so it cannot.
+
+WHY RE-REGISTRATION IS REFUSED
+------------------------------
+A mechanism id is claimed once. Re-registering the same id with different
+contents is the silent mutation §24 forbids, so it is refused loudly and the
+differing fields are named. Re-registering it with *identical* contents is
+refused too -- following `crrg-register-candidate`, which rejects a duplicate
+candidate id even for the same declaration. An id that is already recorded needs
+no second row, and accepting one would make "how many times was this mechanism
+registered" a meaningful question, which it is not.
+
+WHAT resolve-check DOES
+-----------------------
+It resolves each declared basis name against a real Lean environment. A
+mechanism record whose basis names do not exist is a record of nothing, and the
+failure mode that matters is the quiet one: a check that cannot run and reports
+success. So an unconfigured environment is a loud exit 30, never a skip and
+never a pass.
+"""
+
+import argparse
+import hashlib
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+NCOL = 7
+COLUMNS = "mechanism_id obligation_id anchor_ref basis_decls candidate_ids created note".split()
+
+# Fields that constitute identity: everything but `created` and `note`.
+IDENTITY = ("mechanism_id", "obligation_id", "anchor_ref", "basis_decls", "candidate_ids")
+
+EXIT_OK = 0
+EXIT_REJECT = 20
+EXIT_MALFORMED = 30
+
+
+class Malformed(Exception):
+    """The registry is not a well-formed mechanism registry (exit 30)."""
+
+
+class Rejected(Exception):
+    """The operation is refused by §24 discipline (exit 20)."""
+
+
+def read_records(path: Path):
+    if not path.is_file():
+        raise Malformed(f"no mechanism registry at {path}")
+    records = []
+    for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        fields = line.split("\t")
+        if len(fields) != NCOL:
+            raise Malformed(
+                f"line {lineno}: wrong column count ({len(fields)}, expected {NCOL}). "
+                f"Columns are: {'  '.join(COLUMNS)}"
+            )
+        rec = dict(zip(COLUMNS, fields))
+        rec["_lineno"] = lineno
+        if not rec["basis_decls"] or rec["basis_decls"] == "-":
+            raise Malformed(
+                f"line {lineno}: mechanism {rec['mechanism_id']!r} has no basis_decls. "
+                "A mechanism record without a declared basis is not a record (§24)."
+            )
+        records.append(rec)
+    ids = {}
+    for rec in records:
+        prior = ids.get(rec["mechanism_id"])
+        if prior is not None:
+            raise Malformed(
+                f"line {rec['_lineno']}: mechanism id {rec['mechanism_id']!r} appears "
+                f"twice (also line {prior}). The registry is append-only and ids are "
+                "claimed once."
+            )
+        ids[rec["mechanism_id"]] = rec["_lineno"]
+    return records
+
+
+def fingerprint(rec) -> str:
+    """sha256 over the identifying fields, joined by '|'. Note excluded."""
+    material = "|".join(rec[f] for f in IDENTITY)
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def find(records, mechanism_id: str):
+    for rec in records:
+        if rec["mechanism_id"] == mechanism_id:
+            return rec
+    return None
+
+
+def clean_note(note: str) -> str:
+    note = note.replace("\t", " ").replace("\r", " ").replace("\n", " ").strip()
+    return note or "-"
+
+
+def check_field(name: str, value: str) -> str:
+    if value == "":
+        raise Malformed(f"{name} is empty; use '-' for an intentionally empty field")
+    if "\t" in value or "\n" in value or "\r" in value:
+        raise Malformed(f"{name} may not contain a tab or newline")
+    return value
+
+
+def check_id(name: str, value: str) -> str:
+    check_field(name, value)
+    if any(c.isspace() for c in value) or value.startswith("#"):
+        raise Malformed(f"{name} {value!r} must not contain whitespace or start with '#'")
+    return value
+
+
+def parse_decls(basis: str):
+    decls = [d.strip() for d in basis.split(",")]
+    decls = [d for d in decls if d]
+    if not decls:
+        raise Malformed(
+            "basis_decls is empty. A mechanism record without a declared basis is not "
+            "a record (§24)."
+        )
+    return decls
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def append_row(path: Path, fields, before: str) -> None:
+    original = path.read_text()
+    prefix = original if (not original or original.endswith("\n")) else original + "\n"
+    new_text = prefix + "\t".join(fields) + "\n"
+    tmp = path.with_name(f"{path.name}.new.{os.getpid()}")
+    try:
+        tmp.write_text(new_text)
+        if not tmp.read_text().startswith(original.rstrip("\n")):
+            raise Malformed("appending would have altered an existing row")
+        if digest(path) != before:
+            raise Malformed("the registry changed underneath this invocation")
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
+# --------------------------------------------------------------------------
+
+def cmd_register(args, records, path: Path, before: str) -> int:
+    check_id("mechanism_id", args.mechanism_id)
+    check_id("obligation_id", args.obligation_id)
+    check_field("anchor_ref", args.anchor_ref)
+    check_field("basis_decls", args.basis_decls)
+    decls = parse_decls(args.basis_decls)
+    candidate_ids = args.candidate_ids or "-"
+    check_field("candidate_ids", candidate_ids)
+
+    existing = find(records, args.mechanism_id)
+    if existing is not None:
+        proposed = {
+            "mechanism_id": args.mechanism_id,
+            "obligation_id": args.obligation_id,
+            "anchor_ref": args.anchor_ref,
+            "basis_decls": args.basis_decls,
+            "candidate_ids": candidate_ids,
+        }
+        differing = [f for f in IDENTITY if existing[f] != proposed[f]]
+        if differing:
+            raise Rejected(
+                f"mechanism id {args.mechanism_id!r} is already recorded (line "
+                f"{existing['_lineno']}) with different contents: "
+                + ", ".join(f"{f} {existing[f]!r} vs {proposed[f]!r}" for f in differing)
+                + ". A recorded mechanism is never silently mutated (§24); a different "
+                "mechanism needs a new id."
+            )
+        raise Rejected(
+            f"mechanism id {args.mechanism_id!r} is already recorded (line "
+            f"{existing['_lineno']}) with identical contents. An id is claimed once; "
+            "there is nothing to append."
+        )
+
+    fields = [
+        args.mechanism_id,
+        args.obligation_id,
+        args.anchor_ref,
+        args.basis_decls,
+        candidate_ids,
+        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        clean_note(args.note),
+    ]
+    rec = dict(zip(COLUMNS, fields))
+    append_row(path, fields, before)
+
+    print("appended:")
+    print("  " + "\t".join(fields))
+    print(f"basis declarations: {len(decls)}")
+    for d in decls:
+        print(f"  {d}")
+    print(f"fingerprint: {fingerprint(rec)}")
+    print("  (means: declared as the same recorded mechanism. Not novelty, not")
+    print("   similarity, not a score.)")
+    return EXIT_OK
+
+
+def cmd_fingerprint(args, records, _path, _before) -> int:
+    rec = find(records, args.mechanism_id)
+    if rec is None:
+        raise Rejected(f"no mechanism {args.mechanism_id!r} in this registry")
+    print(fingerprint(rec))
+    return EXIT_OK
+
+
+def cmd_resolve_check(args, records, _path, _before) -> int:
+    rec = find(records, args.mechanism_id)
+    if rec is None:
+        raise Rejected(f"no mechanism {args.mechanism_id!r} in this registry")
+    decls = parse_decls(rec["basis_decls"])
+
+    workdir = os.environ.get("CRRG_WORKDIR")
+    imports = os.environ.get("CRRG_IMPORTS")
+    if not workdir or not imports:
+        missing = [n for n, v in (("CRRG_WORKDIR", workdir), ("CRRG_IMPORTS", imports))
+                   if not v]
+        print(
+            "RESOLVE-CHECK UNCONFIGURED: no Lean environment is configured "
+            f"({', '.join(missing)} unset), so the basis declarations of "
+            f"{args.mechanism_id!r} cannot be resolved.\n"
+            "  This is exit 30, not a pass. A check that cannot run must never be "
+            "reported as a check that succeeded.\n"
+            "  Set CRRG_WORKDIR to a lake project root and CRRG_IMPORTS to the "
+            "modules to import, e.g.\n"
+            "    CRRG_WORKDIR=/home/proximity/CRRG CRRG_IMPORTS=CRRG "
+            f"crrg-mechanism resolve-check <registry> {args.mechanism_id}",
+            file=sys.stderr,
+        )
+        return EXIT_MALFORMED
+    if not Path(workdir).is_dir():
+        print(f"RESOLVE-CHECK UNCONFIGURED: CRRG_WORKDIR {workdir!r} is not a directory",
+              file=sys.stderr)
+        return EXIT_MALFORMED
+    if shutil.which("lake") is None:
+        print("RESOLVE-CHECK UNCONFIGURED: `lake` is not on PATH", file=sys.stderr)
+        return EXIT_MALFORMED
+
+    body = ["import " + m.strip() for m in imports.split(",") if m.strip()]
+    body += [f"#check @{d}" for d in decls]
+    tmp = Path(tempfile.mkdtemp(prefix="crrg-mechanism-")) / "ResolveCheck.lean"
+    tmp.write_text("\n".join(body) + "\n")
+    try:
+        proc = subprocess.run(
+            ["lake", "env", "lean", str(tmp)],
+            cwd=workdir, capture_output=True, text=True,
+        )
+    finally:
+        shutil.rmtree(tmp.parent, ignore_errors=True)
+
+    print(f"=== resolve-check {args.mechanism_id} ===")
+    print(f"workdir  {workdir}")
+    print(f"imports  {imports}")
+    for d in decls:
+        print(f"  {d}")
+    if proc.returncode != 0:
+        print("")
+        print("BASIS DECLARATIONS DID NOT RESOLVE:", file=sys.stderr)
+        for line in (proc.stdout + proc.stderr).splitlines()[:20]:
+            print("    " + line, file=sys.stderr)
+        print(
+            f"  mechanism {args.mechanism_id!r} declares a basis that does not resolve "
+            "in this environment (§24).",
+            file=sys.stderr,
+        )
+        return EXIT_REJECT
+    print("")
+    print("all basis declarations resolve")
+    return EXIT_OK
+
+
+COMMANDS = {
+    "register": cmd_register,
+    "fingerprint": cmd_fingerprint,
+    "resolve-check": cmd_resolve_check,
+}
+
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        prog="crrg-mechanism",
+        description="Append-only mechanism record registry (Spec §24)",
+    )
+    sub = ap.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("register")
+    p.add_argument("registry")
+    p.add_argument("mechanism_id")
+    p.add_argument("obligation_id")
+    p.add_argument("anchor_ref")
+    p.add_argument("basis_decls")
+    p.add_argument("candidate_ids", nargs="?", default="-")
+    p.add_argument("note", nargs="?", default="-")
+
+    p = sub.add_parser("fingerprint")
+    p.add_argument("registry")
+    p.add_argument("mechanism_id")
+
+    p = sub.add_parser("resolve-check")
+    p.add_argument("registry")
+    p.add_argument("mechanism_id")
+    return ap
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    path = Path(args.registry)
+    before = None
+    try:
+        if not path.is_file():
+            raise Malformed(f"no mechanism registry at {path}. Create it first, e.g. "
+                            "`printf '# CRRG mechanism registry\\n' > <registry>`.")
+        before = digest(path)
+        records = read_records(path)
+        return COMMANDS[args.command](args, records, path, before)
+    except Rejected as e:
+        print(f"MECHANISM REJECTED: {e}", file=sys.stderr)
+        return untouched_or_worse(path, before, EXIT_REJECT)
+    except Malformed as e:
+        print(f"MECHANISM REGISTRY MALFORMED: {e}", file=sys.stderr)
+        return untouched_or_worse(path, before, EXIT_MALFORMED)
+
+
+def untouched_or_worse(path: Path, before, code: int) -> int:
+    if before is not None and path.is_file() and digest(path) != before:
+        print("crrg-mechanism: INTERNAL ERROR — the registry changed on a failing path",
+              file=sys.stderr)
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

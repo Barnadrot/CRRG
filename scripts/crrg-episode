@@ -1,0 +1,620 @@
+#!/usr/bin/env python3
+"""Append-only research episode log (Spec §22, §23).
+
+Usage:
+    crrg-episode [--threshold N] open       <log> <episode_id> <obligation_id>
+                                            <mechanism_id> <start_ref> [note]
+    crrg-episode [--threshold N] checkpoint <log> <episode_id> <ref> [note]
+    crrg-episode [--threshold N] terminal   <log> <episode_id> <outcome> [note]
+    crrg-episode [--threshold N] respond    <log> <obligation_id> <response> [note]
+    crrg-episode [--threshold N] status     <log> [obligation_id]
+    crrg-episode [--threshold N] may-launch <log> <obligation_id> <mechanism_id>
+    crrg-episode [--threshold N] validate   <log>
+
+The log is TSV with eight fixed columns, `-` for an empty field, `#` comment
+lines allowed:
+
+    kind  episode_id  obligation_id  mechanism_id  payload  commit  created  note
+
+An episode (§23) is: one exact obligation, one certified start state, one
+mechanism, zero or more checkpoints, exactly one terminal outcome. A checkpoint
+is append-only research evidence -- it does not mutate the graph, does not
+increment the stall detector, and does not close the episode.
+
+WHY THE WHOLE LOG IS VALIDATED ON EVERY INVOCATION
+--------------------------------------------------
+The rules that matter here are sequential -- "the episode is open", "the
+obligation is blocked", "exactly one terminal" -- so they are properties of the
+log as a history, not of the row being written. Checking only the new row would
+let an already-broken log keep accepting rows and quietly become the record of
+record. So every invocation replays the entire file first; any violation
+anywhere fails the invocation before anything is appended, and the file is left
+byte-identical on every failing path (verified, not asserted).
+
+The log is append-only. Nothing here rewrites or deletes a row: existing git
+history and existing rows remain valid evidence (§23), and orchestration
+semantics are forward-only.
+
+THE STALL REPLAY MIRRORS CRRG/Stall.lean
+----------------------------------------
+`CRRG/CRRG/Stall.lean` is the semantic reference; this is a mirror of it, not a
+second opinion. Per obligation, in log order:
+
+    TERMINAL admitted-*            count := 0, unblocked
+    TERMINAL noTransition          count := count + 1
+                                   blocked := blocked OR (count % threshold == 0)
+    TERMINAL rejected|toolingFailure   nothing
+    CHECKPOINT                     nothing
+    RESPONSE                       unblocked
+
+Note the OR: a block accumulates, it is never assigned. Only a recorded stall
+response or certified movement clears one (§22). Were the flag assigned, a sixth
+no-transition would compute 6 % 5 != 0 and clear the block -- an obligation
+would escape its own stall by producing exactly the no-movement the detector
+exists to interrupt.
+
+WHAT THIS DOES NOT DO
+---------------------
+It does not judge whether an obligation is true, hard, or at the right depth
+(§10 is a separate judgement), and it does not decide what to research next. The
+count is orchestration state: it never feeds a score, a reward, or a rendered
+aggregate (§1, §19.3). `status` prints labeled state and nothing that could be
+read as a result.
+
+The same-mechanism rejection is deliberately *immediate only*: it fires against
+the next launch after a stall response, and is spent by that launch. Durable
+anti-circling across a long history is deferred research (§26 R2), not something
+this script pretends to enforce.
+"""
+
+import argparse
+import hashlib
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+KINDS = ("OPEN", "CHECKPOINT", "TERMINAL", "RESPONSE")
+
+OUTCOMES = (
+    "admitted-closed",
+    "admitted-refined",
+    "admitted-split",
+    "admitted-refuted",
+    "admitted-retired",
+    "admitted-superseded",
+    "admitted-quantitative",
+    "noTransition",
+    "rejected",
+    "toolingFailure",
+)
+
+RESPONSES = (
+    "reselect",
+    "backtrack",
+    "newMechanism",
+    "proposeRefinement",
+    "ownerOverride",
+)
+
+# §19.2: the four terminal states must stay mechanically distinguishable.
+OUTCOME_EXIT = {"noTransition": 10, "rejected": 20, "toolingFailure": 30}
+
+NCOL = 8
+COLUMNS = "kind episode_id obligation_id mechanism_id payload commit created note".split()
+
+EXIT_OK = 0
+EXIT_REJECT = 20
+EXIT_MALFORMED = 30
+
+DEFAULT_THRESHOLD = 5
+
+
+class Malformed(Exception):
+    """The log is not a well-formed episode log (exit 30)."""
+
+
+class Violation(Exception):
+    """The log breaks a §22/§23 rule (exit 30)."""
+
+
+class Row:
+    __slots__ = ("lineno", "kind", "episode_id", "obligation_id", "mechanism_id",
+                 "payload", "commit", "created", "note")
+
+    def __init__(self, lineno, fields):
+        self.lineno = lineno
+        (self.kind, self.episode_id, self.obligation_id, self.mechanism_id,
+         self.payload, self.commit, self.created, self.note) = fields
+
+
+def read_rows(path: Path):
+    """Parse the whole log. Raises Malformed; never partially succeeds."""
+    if not path.is_file():
+        raise Malformed(f"no episode log at {path}")
+    rows = []
+    for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        fields = line.split("\t")
+        if len(fields) != NCOL:
+            raise Malformed(
+                f"line {lineno}: wrong column count ({len(fields)}, expected {NCOL}). "
+                f"Columns are: {'  '.join(COLUMNS)}"
+            )
+        if fields[0] not in KINDS:
+            raise Malformed(
+                f"line {lineno}: unknown kind {fields[0]!r}; expected one of "
+                + " | ".join(KINDS)
+            )
+        rows.append(Row(lineno, fields))
+    return rows
+
+
+def is_multiple(count: int, threshold: int) -> bool:
+    """Mirrors Lean `Nat` semantics, where `n % 0 = n`, so a threshold of 0
+    never blocks for the count >= 1 reachable here."""
+    if threshold <= 0:
+        return count == 0
+    return count % threshold == 0
+
+
+def new_obligation_state():
+    return {
+        "count": 0,
+        "blocked": False,
+        "open_episode": None,
+        # Mechanism of the episode whose no-transition flipped `blocked` to true.
+        "pending_trigger": None,
+        # Mechanism a launch is currently refused for; spent by the next OPEN.
+        "armed": None,
+    }
+
+
+def replay(rows, threshold: int):
+    """Validate rules 1-5 over the whole log and return per-obligation state.
+
+    Raises Violation (rule break) or Malformed (unknown token / shape).
+    """
+    episodes = {}
+    obligations = {}
+
+    def ostate(oid):
+        return obligations.setdefault(oid, new_obligation_state())
+
+    for r in rows:
+        if r.kind == "OPEN":
+            if r.episode_id == "-":
+                raise Malformed(f"line {r.lineno}: an OPEN row needs a real episode_id")
+            if r.episode_id in episodes:
+                raise Violation(
+                    f"line {r.lineno}: episode id {r.episode_id!r} already used at line "
+                    f"{episodes[r.episode_id]['lineno']}. Episode ids are not reused."
+                )
+            st = ostate(r.obligation_id)
+            if st["open_episode"] is not None:
+                raise Violation(
+                    f"line {r.lineno}: obligation {r.obligation_id!r} already has an "
+                    f"open episode ({st['open_episode']!r}). One episode at a time per "
+                    "obligation (§23)."
+                )
+            episodes[r.episode_id] = {
+                "lineno": r.lineno,
+                "obligation": r.obligation_id,
+                "mechanism": r.mechanism_id,
+                "closed": False,
+            }
+            st["open_episode"] = r.episode_id
+            # A launch happened: an armed same-mechanism rejection is spent.
+            st["armed"] = None
+
+        elif r.kind in ("CHECKPOINT", "TERMINAL"):
+            ep = episodes.get(r.episode_id)
+            if ep is None:
+                raise Violation(
+                    f"line {r.lineno}: no OPEN row for episode {r.episode_id!r}"
+                )
+            if ep["closed"]:
+                raise Violation(
+                    f"line {r.lineno}: episode {r.episode_id!r} is closed; no row may "
+                    "reference a closed episode, and an episode has exactly one "
+                    "terminal outcome (§23)."
+                )
+            if r.obligation_id != ep["obligation"]:
+                raise Violation(
+                    f"line {r.lineno}: obligation mismatch for episode "
+                    f"{r.episode_id!r}: row says {r.obligation_id!r}, its OPEN says "
+                    f"{ep['obligation']!r}"
+                )
+            if r.mechanism_id != ep["mechanism"]:
+                raise Violation(
+                    f"line {r.lineno}: mechanism mismatch for episode "
+                    f"{r.episode_id!r}: row says {r.mechanism_id!r}, its OPEN says "
+                    f"{ep['mechanism']!r}"
+                )
+            st = ostate(r.obligation_id)
+            if r.kind == "TERMINAL":
+                if r.payload not in OUTCOMES:
+                    raise Malformed(
+                        f"line {r.lineno}: unknown outcome token {r.payload!r}; "
+                        "expected one of " + " | ".join(OUTCOMES)
+                    )
+                ep["closed"] = True
+                st["open_episode"] = None
+                apply_terminal(st, r.payload, ep["mechanism"], threshold)
+
+        elif r.kind == "RESPONSE":
+            if r.episode_id != "-" or r.mechanism_id != "-":
+                raise Malformed(
+                    f"line {r.lineno}: a RESPONSE row carries episode_id '-' and "
+                    "mechanism_id '-'; it is recorded against the obligation, not an "
+                    "episode"
+                )
+            if r.payload not in RESPONSES:
+                raise Malformed(
+                    f"line {r.lineno}: unknown response name {r.payload!r}; expected "
+                    "one of " + " | ".join(RESPONSES)
+                )
+            st = ostate(r.obligation_id)
+            if not st["blocked"]:
+                raise Violation(
+                    f"line {r.lineno}: obligation {r.obligation_id!r} is not blocked; "
+                    "a stall response is only recorded against a blocked obligation "
+                    "(§22)."
+                )
+            apply_response(st, r.payload)
+
+    return obligations
+
+
+def apply_terminal(st, outcome: str, mechanism: str, threshold: int) -> None:
+    """The Stall.lean transition, per obligation."""
+    if outcome.startswith("admitted-"):
+        # Certified movement materially changed the obligation: the history of
+        # no-transitions is spent, and so is any armed rejection.
+        st["count"] = 0
+        st["blocked"] = False
+        st["pending_trigger"] = None
+        st["armed"] = None
+    elif outcome == "noTransition":
+        st["count"] += 1
+        was_blocked = st["blocked"]
+        if is_multiple(st["count"], threshold):
+            # Accumulate, never assign.
+            st["blocked"] = True
+            if not was_blocked:
+                st["pending_trigger"] = mechanism
+    # `rejected` and `toolingFailure` are integrity events (§19): inert here.
+
+
+def apply_response(st, response: str) -> None:
+    st["blocked"] = False
+    if response != "ownerOverride" and st["pending_trigger"] is not None:
+        # The first response that is not an owner override arms an immediate
+        # rejection against the mechanism that stalled.
+        st["armed"] = st["pending_trigger"]
+        st["pending_trigger"] = None
+
+
+# --------------------------------------------------------------------------
+# Field hygiene
+# --------------------------------------------------------------------------
+
+def clean_note(note: str) -> str:
+    """Tabs would add columns; newlines would add rows."""
+    note = note.replace("\t", " ").replace("\r", " ").replace("\n", " ").strip()
+    return note or "-"
+
+
+def check_field(name: str, value: str) -> str:
+    if value == "":
+        raise Malformed(f"{name} is empty; use '-' for an intentionally empty field")
+    if "\t" in value or "\n" in value or "\r" in value:
+        raise Malformed(f"{name} may not contain a tab or newline")
+    return value
+
+
+def check_id(name: str, value: str) -> str:
+    check_field(name, value)
+    if any(c.isspace() for c in value) or value.startswith("#"):
+        raise Malformed(
+            f"{name} {value!r} must not contain whitespace or start with '#'"
+        )
+    return value
+
+
+def head_commit() -> str:
+    workdir = os.environ.get("CRRG_WORKDIR") or str(Path(__file__).resolve().parent.parent)
+    try:
+        out = subprocess.run(
+            ["git", "-C", workdir, "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, check=True,
+        )
+        return out.stdout.strip() or "-"
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return "-"
+
+
+def now_utc() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+# --------------------------------------------------------------------------
+# Append, with the registry discipline of crrg-register-candidate
+# --------------------------------------------------------------------------
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def append_row(path: Path, fields, before: str) -> None:
+    """Build the new file beside the real one, verify it, then rename over it.
+
+    A half-written log is never observable, and existing rows are compared
+    rather than trusted -- that catches an editor, a locale, or a stray CR that
+    a blind append would not.
+    """
+    original = path.read_text()
+    prefix = original if (not original or original.endswith("\n")) else original + "\n"
+    new_text = prefix + "\t".join(fields) + "\n"
+
+    tmp = path.with_name(f"{path.name}.new.{os.getpid()}")
+    try:
+        tmp.write_text(new_text)
+        if not tmp.read_text().startswith(original.rstrip("\n")):
+            raise Malformed("appending would have altered an existing row")
+        if digest(path) != before:
+            raise Malformed("the log changed underneath this invocation")
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
+# --------------------------------------------------------------------------
+# Subcommands
+# --------------------------------------------------------------------------
+
+def cmd_validate(args, rows, _obligations) -> int:
+    print("=== CRRG episode log validation ===")
+    print(f"log        {args.log}")
+    print(f"threshold  {args.threshold}")
+    print(f"rows       {len(rows)}")
+    print("")
+    print("episode log OK")
+    return EXIT_OK
+
+
+def print_obligation(oid: str, st) -> None:
+    print(f"obligation {oid}")
+    print(f"  no-transition-count: {st['count']}")
+    print(f"  blocked: {'yes' if st['blocked'] else 'no'}")
+    print(f"  open-episode: {st['open_episode'] or '-'}")
+    print(f"  armed-mechanism: {st['armed'] or '-'}")
+
+
+def cmd_status(args, _rows, obligations) -> int:
+    print("=== CRRG episode status ===")
+    print(f"log        {args.log}")
+    print(f"threshold  {args.threshold}")
+    print("")
+    print("Orchestration state only. This is not a research result and carries no")
+    print("judgement about truth, difficulty, or reduction depth (§10, §19.3).")
+    print("")
+    if args.obligation_id:
+        st = obligations.get(args.obligation_id)
+        if st is None:
+            print(f"obligation {args.obligation_id}")
+            print("  no rows in this log")
+            return EXIT_OK
+        print_obligation(args.obligation_id, st)
+        return EXIT_OK
+    for oid in sorted(obligations):
+        print_obligation(oid, obligations[oid])
+        print("")
+    return EXIT_OK
+
+
+def cmd_may_launch(args, _rows, obligations) -> int:
+    st = obligations.get(args.obligation_id) or new_obligation_state()
+    if st["blocked"]:
+        print(
+            f"MAY-LAUNCH REJECTED: stalled: response required for obligation "
+            f"{args.obligation_id!r} (no-transition count {st['count']}, threshold "
+            f"{args.threshold}). Record one of: " + " | ".join(RESPONSES),
+            file=sys.stderr,
+        )
+        return EXIT_REJECT
+    if st["armed"] is not None and st["armed"] == args.mechanism_id:
+        print(
+            f"MAY-LAUNCH REJECTED: same mechanism immediately after stall: "
+            f"{args.mechanism_id!r} is the mechanism that stalled obligation "
+            f"{args.obligation_id!r}. Continue under a different recorded mechanism, "
+            "or record an ownerOverride (§22).",
+            file=sys.stderr,
+        )
+        return EXIT_REJECT
+    print(f"may-launch: allowed  obligation {args.obligation_id}  mechanism {args.mechanism_id}")
+    return EXIT_OK
+
+
+def cmd_open(args, _rows, _obligations, before: str):
+    check_id("episode_id", args.episode_id)
+    check_id("obligation_id", args.obligation_id)
+    check_id("mechanism_id", args.mechanism_id)
+    check_field("start_ref", args.start_ref)
+    return ["OPEN", args.episode_id, args.obligation_id, args.mechanism_id,
+            args.start_ref, head_commit(), now_utc(), clean_note(args.note)]
+
+
+def episode_row(rows, episode_id: str):
+    for r in rows:
+        if r.kind == "OPEN" and r.episode_id == episode_id:
+            return r
+    raise Violation(
+        f"no open episode {episode_id!r} in this log; a checkpoint or terminal is "
+        "recorded against an episode that was opened (§23)."
+    )
+
+
+def cmd_checkpoint(args, rows, _obligations, before: str):
+    check_id("episode_id", args.episode_id)
+    check_field("ref", args.ref)
+    ep = episode_row(rows, args.episode_id)
+    return ["CHECKPOINT", args.episode_id, ep.obligation_id, ep.mechanism_id,
+            args.ref, head_commit(), now_utc(), clean_note(args.note)]
+
+
+def cmd_terminal(args, rows, _obligations, before: str):
+    check_id("episode_id", args.episode_id)
+    if args.outcome not in OUTCOMES:
+        raise Malformed(
+            f"unknown outcome token {args.outcome!r}; expected one of "
+            + " | ".join(OUTCOMES)
+        )
+    ep = episode_row(rows, args.episode_id)
+    return ["TERMINAL", args.episode_id, ep.obligation_id, ep.mechanism_id,
+            args.outcome, head_commit(), now_utc(), clean_note(args.note)]
+
+
+def cmd_respond(args, _rows, obligations, before: str):
+    check_id("obligation_id", args.obligation_id)
+    if args.response not in RESPONSES:
+        raise Malformed(
+            f"unknown response name {args.response!r}; expected one of "
+            + " | ".join(RESPONSES)
+        )
+    st = obligations.get(args.obligation_id) or new_obligation_state()
+    if not st["blocked"]:
+        print(
+            f"RESPONSE REJECTED: obligation {args.obligation_id!r} is not blocked; a "
+            "stall response is only recorded against a blocked obligation (§22). "
+            f"No-transition count is {st['count']}, threshold {args.threshold}.",
+            file=sys.stderr,
+        )
+        sys.exit(EXIT_REJECT)
+    return ["RESPONSE", "-", args.obligation_id, "-", args.response,
+            head_commit(), now_utc(), clean_note(args.note)]
+
+
+APPENDERS = {
+    "open": cmd_open,
+    "checkpoint": cmd_checkpoint,
+    "terminal": cmd_terminal,
+    "respond": cmd_respond,
+}
+
+READERS = {
+    "validate": cmd_validate,
+    "status": cmd_status,
+    "may-launch": cmd_may_launch,
+}
+
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        prog="crrg-episode",
+        description="Append-only research episode log (Spec §22, §23)",
+    )
+    ap.add_argument("--threshold", type=int, default=DEFAULT_THRESHOLD,
+                    help=f"stall threshold (default {DEFAULT_THRESHOLD})")
+    sub = ap.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("open")
+    p.add_argument("log")
+    p.add_argument("episode_id")
+    p.add_argument("obligation_id")
+    p.add_argument("mechanism_id")
+    p.add_argument("start_ref")
+    p.add_argument("note", nargs="?", default="-")
+
+    p = sub.add_parser("checkpoint")
+    p.add_argument("log")
+    p.add_argument("episode_id")
+    p.add_argument("ref")
+    p.add_argument("note", nargs="?", default="-")
+
+    p = sub.add_parser("terminal")
+    p.add_argument("log")
+    p.add_argument("episode_id")
+    p.add_argument("outcome")
+    p.add_argument("note", nargs="?", default="-")
+
+    p = sub.add_parser("respond")
+    p.add_argument("log")
+    p.add_argument("obligation_id")
+    p.add_argument("response")
+    p.add_argument("note", nargs="?", default="-")
+
+    p = sub.add_parser("status")
+    p.add_argument("log")
+    p.add_argument("obligation_id", nargs="?", default=None)
+
+    p = sub.add_parser("may-launch")
+    p.add_argument("log")
+    p.add_argument("obligation_id")
+    p.add_argument("mechanism_id")
+
+    p = sub.add_parser("validate")
+    p.add_argument("log")
+    return ap
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    path = Path(args.log)
+    args.log = str(path)
+    before = None
+
+    try:
+        if not path.is_file():
+            raise Malformed(f"no episode log at {path}. Create it first, e.g. "
+                            "`printf '# CRRG episode log\\n' > <log>`.")
+        before = digest(path)
+        rows = read_rows(path)
+        obligations = replay(rows, args.threshold)
+
+        if args.command in READERS:
+            return READERS[args.command](args, rows, obligations)
+
+        fields = APPENDERS[args.command](args, rows, obligations, before)
+
+        # The log with the new row must satisfy the same rules the old one did.
+        candidate = rows + [Row(len(rows) + 1, fields)]
+        replay(candidate, args.threshold)
+
+        append_row(path, fields, before)
+
+    except Violation as e:
+        print(f"EPISODE LOG REJECTED: {e}", file=sys.stderr)
+        return untouched_or_worse(path, before, EXIT_MALFORMED)
+    except Malformed as e:
+        print(f"EPISODE LOG MALFORMED: {e}", file=sys.stderr)
+        return untouched_or_worse(path, before, EXIT_MALFORMED)
+
+    print("appended:")
+    print("  " + "\t".join(fields))
+    print(f"recorded: {fields[0]} {fields[4]} on obligation {fields[2]}")
+
+    if args.command == "terminal":
+        code = OUTCOME_EXIT.get(args.outcome, EXIT_OK)
+        print(f"terminal outcome: {args.outcome} (exit {code}, per §19.2)")
+        if args.outcome == "noTransition":
+            st = replay(rows + [Row(0, fields)], args.threshold)[fields[2]]
+            print(f"  no-transition-count: {st['count']}")
+            print(f"  blocked: {'yes' if st['blocked'] else 'no'}")
+        return code
+    return EXIT_OK
+
+
+def untouched_or_worse(path: Path, before, code: int) -> int:
+    """Every failing path leaves the log byte-identical; verified, not asserted."""
+    if before is not None and path.is_file() and digest(path) != before:
+        print("crrg-episode: INTERNAL ERROR — the log changed on a failing path",
+              file=sys.stderr)
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())
