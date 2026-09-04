@@ -211,6 +211,65 @@ expect reject "registry verification FAILED" \
   env CRRG_IMPORTS="$SEAL_IMPORTS" "$SCRIPT_DIR/crrg-seal" \
      --verify-registry "$TMPDIR_SELFTEST/bad.tsv"
 
+# --- the registry sweep runs in ONE Lean process -----------------------------
+#
+# PARITY IS THE PROPERTY, and it is proved here rather than assumed. Every hash
+# below (`H_STRONG`, `H_COMPOSED`, `H_WEAK`) was produced by the PER-DECLARATION
+# path, one process each. The sweep accepting all three means the batched path
+# computed byte-identical hashes for every row.
+#
+# `SealFixture.Composed` earns its place: it is sealed with no CRRG_SEAL_SCOPE,
+# so its scope defaults to its own root namespace. That default is per
+# DECLARATION, and a sweep that computed it once for the whole batch would get
+# this row wrong -- which is the one way batching could quietly change a hash.
+{
+  printf 'P001\tSealFixture.Strong\t%s\tHEAD\t2026-01-01T00:00:00Z\tthm\tN1\tN0\n' "$H_STRONG"
+  printf 'P002\tSealFixture.Composed\t%s\tHEAD\t2026-01-01T00:00:00Z\tthm\tN1\tN0\n' "$H_COMPOSED"
+  printf 'P003\tSealFixture.Weakened\t%s\tHEAD\t2026-01-01T00:00:00Z\tthm\tN1\tN0\n' "$H_WEAK"
+} > "$TMPDIR_SELFTEST/parity.tsv"
+expect ok "registry verification PASSED (3 seals)" \
+  "the batched sweep hashes every row exactly as the per-declaration path did" \
+  env CRRG_IMPORTS="$SEAL_IMPORTS" "$SCRIPT_DIR/crrg-seal" \
+     --verify-registry "$TMPDIR_SELFTEST/parity.tsv"
+
+# A tampered row must still be named as that row. Batching moved the naming from
+# "the row's own process died" to "the row's own record says so", and the point
+# of the sweep is worthless if it can only say that something, somewhere, broke.
+{
+  printf 'T001\tSealFixture.Strong\t%s\tHEAD\t2026-01-01T00:00:00Z\tthm\tN1\tN0\n' "$H_STRONG"
+  printf 'T002\tSealFixture.Composed\t%s\tHEAD\t2026-01-01T00:00:00Z\tthm\tN1\tN0\n' "$H_STRONG"
+  printf 'T003\tSealFixture.Weakened\t%s\tHEAD\t2026-01-01T00:00:00Z\tthm\tN1\tN0\n' "$H_WEAK"
+} > "$TMPDIR_SELFTEST/tampered.tsv"
+expect reject "BROKEN  T002" \
+  "the batched sweep names the tampered row, not just the registry" \
+  env CRRG_IMPORTS="$SEAL_IMPORTS" "$SCRIPT_DIR/crrg-seal" \
+     --verify-registry "$TMPDIR_SELFTEST/tampered.tsv"
+
+# ...and the sweep CONTINUED past it: 1 of 3, not 1 of 1. One bad row used to
+# kill its own process and leave the others to their own; inside one process a
+# row that throws must not take the rest of the sweep with it.
+expect reject "FAILED (1 of 3)" \
+  "  ...and the other rows were still checked (per-row isolation survives)" \
+  env CRRG_IMPORTS="$SEAL_IMPORTS" "$SCRIPT_DIR/crrg-seal" \
+     --verify-registry "$TMPDIR_SELFTEST/tampered.tsv"
+
+# The other isolation direction: a row that cannot be sealed AT ALL. In the
+# per-process design its process died; in one process it must be caught inside
+# the batch, reported against its id, and the sweep must go on.
+{
+  printf 'M001\tSealFixture.NoSuchTarget\t%s\tHEAD\t2026-01-01T00:00:00Z\tthm\tN1\tN0\n' "$H_STRONG"
+  printf 'M002\tSealFixture.Strong\t%s\tHEAD\t2026-01-01T00:00:00Z\tthm\tN1\tN0\n' "$H_STRONG"
+} > "$TMPDIR_SELFTEST/missing.tsv"
+expect reject "ERROR   M001" \
+  "a row whose declaration does not exist is named, inside the batch" \
+  env CRRG_IMPORTS="$SEAL_IMPORTS" "$SCRIPT_DIR/crrg-seal" \
+     --verify-registry "$TMPDIR_SELFTEST/missing.tsv"
+
+expect reject "FAILED (1 of 2)" \
+  "  ...and the sealable row after it was still checked" \
+  env CRRG_IMPORTS="$SEAL_IMPORTS" "$SCRIPT_DIR/crrg-seal" \
+     --verify-registry "$TMPDIR_SELFTEST/missing.tsv"
+
 
 echo ""
 echo "crrg-register-candidate:"

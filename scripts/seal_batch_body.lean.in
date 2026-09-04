@@ -1,0 +1,35 @@
+
+-- The REGISTRY-SWEEP driver.
+--
+-- WHY THIS EXISTS. Sealing one declaration costs ~0.4s of elaboration on top of
+-- ~2.6s of process start-up and olean loading. Sweeping a 29-row registry one
+-- process per row therefore paid that ~2.6s twenty-nine times to answer one
+-- question -- ~88s where ~14s does the same work. That is duplicated work, not
+-- duplicated checking: every declaration is still elaborated by the same kernel
+-- and hashed through the same canonicalisation, once each.
+--
+-- It emits one delimited record per declaration, so per-row verdicts survive
+-- exactly as they did when each row had its own process.
+--
+-- PER-ROW ERROR ISOLATION. A row that cannot be sealed -- missing declaration,
+-- elaboration failure -- is caught HERE and reported as that row's own named
+-- failure, and the sweep continues to the rest. Previously the row was named by
+-- its process dying; now it is named by its record. Either way the registry
+-- reader learns which row is bad, which is the only thing that matters.
+run_cmd do
+  let listPath := ((← IO.getEnv "CRRG_SEAL_DECL_FILE").getD "").trimAscii.toString
+  if listPath.isEmpty then
+    throwError "crrg-seal: no declaration list given"
+  let contents ← IO.FS.readFile listPath
+  let decls := contents.splitOn "\n" |>.filterMap fun l =>
+    let l := l.trimAscii.toString
+    if l.isEmpty then none else some l
+  let env := (← getEnv).setExporting false
+  let scopeStr := ((← IO.getEnv "CRRG_SEAL_SCOPE").getD "").trimAscii.toString
+  for d in decls do
+    IO.println s!"CRRG_BATCH_BEGIN {d}"
+    try
+      crrgEmitSeal env d.toName scopeStr
+    catch e =>
+      IO.println s!"CRRG_BATCH_ERROR {← e.toMessageData.toString}"
+    IO.println s!"CRRG_BATCH_END {d}"

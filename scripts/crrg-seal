@@ -99,7 +99,7 @@ seal_of() {
     m="$(echo "$m" | tr -d '[:space:]')"
     [ -n "$m" ] && echo "import $m" >> "$tmp"
   done
-  cat "$SCRIPT_DIR/seal_body.lean.in" >> "$tmp"
+  cat "$SCRIPT_DIR/seal_common.lean.in" "$SCRIPT_DIR/seal_body.lean.in" >> "$tmp"
 
   if ! out="$(CRRG_SEAL_DECL="$decl" lake env lean "$tmp" 2>&1)"; then
     rm -f "$tmp"
@@ -124,6 +124,76 @@ seal_of() {
     return 1
   fi
   SEAL_HASH="$(printf '%s' "$canonical" | sha256sum | cut -d' ' -f1)"
+}
+
+# Seal EVERY declaration in ONE Lean process, and print `decl<TAB>hash`, or
+# `decl<TAB>ERROR<TAB>message` for a row that could not be sealed.
+#
+# This is the registry sweep's whole optimisation. Sealing one declaration costs
+# ~0.4s of elaboration on top of ~2.6s of process start-up and olean loading, so
+# a 29-row sweep run one-process-per-row paid that start-up 29 times to answer
+# one question. Nothing about what is checked changes: the same declarations are
+# elaborated by the same kernel, through the same `crrgEmitSeal`, and hashed over
+# the same canonical block -- once each, in one process.
+#
+# The hash is computed exactly as `seal_of` computes it: the lines strictly
+# between the canonical markers, joined by newlines with no trailing newline
+# (which is what `$(...)` plus `printf '%s'` yields), sha256 over that.
+seal_all() {
+  local decls_file="$1"
+  local tmp out rc m
+  tmp="${WORKDIR}/.crrg_seal_batch_$$.lean"
+  echo "import Lean" > "$tmp"
+  IFS=',' read -ra _mods <<< "$IMPORTS"
+  for m in "${_mods[@]}"; do
+    m="$(echo "$m" | tr -d '[:space:]')"
+    [ -n "$m" ] && echo "import $m" >> "$tmp"
+  done
+  cat "$SCRIPT_DIR/seal_common.lean.in" "$SCRIPT_DIR/seal_batch_body.lean.in" >> "$tmp"
+
+  out="$(CRRG_SEAL_DECL_FILE="$decls_file" lake env lean "$tmp" 2>&1)"; rc=$?
+  rm -f "$tmp"
+
+  # A non-zero exit with no records at all means the batch could not run --
+  # a bad import list, a broken environment. That is not a seal verdict and
+  # must not be reported as one.
+  if ! grep -q '^CRRG_BATCH_BEGIN ' <<<"$out"; then
+    echo "$out" >&2
+    return 1
+  fi
+
+  # The program comes from the heredoc and the DATA from argv, as elsewhere in
+  # this toolchain: both on stdin would collide and python would try to execute
+  # the batch output.
+  local raw="${WORKDIR}/.crrg_seal_batch_out_$$.txt"
+  printf '%s' "$out" > "$raw"
+  python3 - "$raw" <<'PYPARSE'
+import hashlib, sys
+decl = None; canon = None; err = None; out = []
+for line in open(sys.argv[1]).read().split("\n"):
+    if line.startswith("CRRG_BATCH_BEGIN "):
+        decl = line[len("CRRG_BATCH_BEGIN "):]; canon = None; err = None
+    elif line.startswith("CRRG_BATCH_ERROR "):
+        err = line[len("CRRG_BATCH_ERROR "):]
+    elif line == "CRRG_SEAL_CANONICAL_BEGIN":
+        canon = []
+    elif line == "CRRG_SEAL_CANONICAL_END":
+        pass
+    elif line.startswith("CRRG_BATCH_END "):
+        if err is not None:
+            out.append(f"{decl}\tERROR\t{err}")
+        elif canon is None:
+            out.append(f"{decl}\tERROR\tno canonical block emitted")
+        else:
+            # `$(...)` strips trailing newlines; `printf '%s'` adds none.
+            text = "\n".join(canon).rstrip("\n")
+            out.append(f"{decl}\t{hashlib.sha256(text.encode()).hexdigest()}")
+        decl = None; canon = None; err = None
+    elif canon is not None:
+        canon.append(line)
+print("\n".join(out))
+PYPARSE
+  rm -f "$raw"
 }
 
 case "$MODE" in
@@ -188,13 +258,40 @@ registry)
   echo ""
   broken=0
   checked=0
+
+  # ONE Lean process for the whole sweep. Every row is still sealed and compared
+  # individually below; what is no longer repeated is loading the environment.
+  DECLS="${WORKDIR}/.crrg_seal_decls_$$.txt"
+  awk -F'\t' '$1 !~ /^#/ && $1 != "" && $2 != "" { print $2 }' "$REGISTRY" > "$DECLS"
+  if ! BATCH="$(seal_all "$DECLS")"; then
+    rm -f "$DECLS"
+    echo "crrg-seal: the registry sweep could not run (see above)" >&2
+    exit 1
+  fi
+  rm -f "$DECLS"
+
+  # decl -> hash, or decl -> ERROR<TAB>message.
+  #
+  # Fields are read out by index rather than by blanking $1: assigning to a field
+  # makes awk rebuild the record with OFS (a space), which silently prefixed the
+  # hash with a space and made every row compare unequal to its recorded value.
+  # The hashes were right; the comparison was not. Exactly the reason this change
+  # had to prove parity rather than check that the sweep still "passes".
+  batch_result() {
+    awk -F'\t' -v d="$1" '$1 == d {
+      if ($2 == "ERROR") printf "ERROR\t%s", $3; else printf "%s", $2; exit }' <<<"$BATCH"
+  }
+
   while IFS=$'\t' read -r id decl hash commit created expected_thm target_id source_ids || [ -n "$id" ]; do
     case "$id" in ''|'#'*) continue ;; esac
     checked=$((checked + 1))
-    if ! seal_of "$decl"; then
-      echo "  ERROR   $id  $decl (could not be sealed; see above)"
-      broken=$((broken + 1)); continue
-    fi
+    RES="$(batch_result "$decl")"
+    case "$RES" in
+      ERROR*|'')
+        echo "  ERROR   $id  $decl (could not be sealed: ${RES#ERROR	})"
+        broken=$((broken + 1)); continue ;;
+    esac
+    SEAL_HASH="$RES"
     if [ "$SEAL_HASH" = "$hash" ]; then
       echo "  OK      $id  $decl"
     else
