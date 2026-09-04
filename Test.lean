@@ -13,3 +13,5 @@ import Test.Synthetic.Escape
 import Test.Synthetic.CandidateSeal
 import Test.Synthetic.NegativeTests
 import Test.Synthetic.Transition
+import Test.Synthetic.Outcome
+import Test.Synthetic.Stall

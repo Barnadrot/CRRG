@@ -10,3 +10,5 @@ import CRRG.Candidate
 import CRRG.Report
 import CRRG.Audit
 import CRRG.Transition
+import CRRG.Outcome
+import CRRG.Stall
