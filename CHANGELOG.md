@@ -187,6 +187,14 @@ the staged implementation plan (§15). Do not reconcile the two.
 | 15 | Yukon damaged-proof cost measured before directing live Soundness | DEFERRED — Stage C |
 | 16 | An agent gets a correct binary reward from one exact leaf | DONE |
 
+### v0.9 (current spec numbering §18–§27; rows are added as phases land)
+
+| Req | Requirement | Status | Ref |
+|-----|-------------|--------|-----|
+| 20 | `Frontier.AllClosed`, `Frontier.Transition`, identity / composition / root-closure transport | DONE | `CHG-34` |
+| 20 | `refineLeaf` / `splitLeaf` / `retireLeaf` each induce a transition witness | DONE | `CHG-34` |
+| 19, 21–25 | outcome semantics, unique obligations, stall detector, episodes, mechanism identity, novelty evidence | MISSING | spec `SPEC-12`; Phases C–E pending |
+
 ---
 
 ## 2. Change log
@@ -195,6 +203,33 @@ the staged implementation plan (§15). Do not reconcile the two.
 
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
 work lands.
+
+#### `CHG-34` — first-class frontier transitions (v0.9 Phase B)
+
+§20's mathematical core is implemented in `CRRG/Transition.lean`:
+`Frontier.AllClosed`, a universe-polymorphic `Prop`-valued
+`Frontier.Transition source target` whose only field is
+`preserve : target.AllClosed → source.AllClosed`, and the three required
+generic theorems — identity, composition (three universe levels), and
+root-closure transport through the source frontier's own `closeRoot`.
+`refineLeaf`, `splitLeaf`, and `retireLeaf` each induce a transition witness;
+their `preserve` proofs are the operators' own `closeRoot` bodies with the
+final root application peeled off — the content that was previously locked
+inside each operator is now a composable object. `Frontier.compose` and
+`Frontier.ofSplit` owe no witness (compose changes the root; ofSplit has no
+source) and §20 now says so explicitly.
+
+The universe polymorphism is forced, not stylistic: `splitLeaf` lands in
+`max u v`, so `splitLeaf_transition : Transition.{u, max u v} F (F.splitLeaf …)`
+cannot be stated over a single level. The synthetic test module exercises the
+smallest cross-universe composition a monomorphic definition would reject, an
+explicit `F0 → F1 → F2` refine/split chain collapsed into one certificate that
+closes the original root, and retirement of the last live leaf leaving an empty
+task type. Axiom footprint unchanged: only `refineLeaf_transition` uses
+`propext`, inherited from `refineLeaf` itself (auditor-verified, not just
+reported).
+
+Strictly additive: two new modules and two import lines. Phase B of §18.3.
 
 #### `SPEC-12` — v0.9.0-draft: the orchestration layer becomes normative
 

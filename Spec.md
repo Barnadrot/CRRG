@@ -1101,7 +1101,7 @@ root-closure transport: source.closeRoot composed with a
   Transition source target yields target.AllClosed → root.claim
 ```
 
-Every existing frontier operator must expose or induce a transition witness: `refineLeaf`, `splitLeaf`, and `retireLeaf` each induce a `Transition` from the pre-operation to the post-operation frontier. The point is an explicit certified state chain
+Every existing frontier operator must expose or induce a transition witness: `refineLeaf`, `splitLeaf`, and `retireLeaf` each induce a `Transition` from the pre-operation to the post-operation frontier. `Frontier.compose` and `Frontier.ofSplit` owe no same-root witness: `compose` changes the root (its certificate is the `Edge` itself, composed with the inner frontier's `closeRoot`), and `ofSplit` constructs an initial frontier with no source. The operator-witness requirement covers exactly the three leaf-preserving operators. The point is an explicit certified state chain
 
 ```text
 F0 --T1--> F1 --T2--> ... --Tn--> Fn
