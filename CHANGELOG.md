@@ -240,13 +240,16 @@ check: nothing resolves the anchor, nothing downstream consumes it, the registry
 has zero rows, and no shape is prescribed anywhere — so a two-shape check would
 have created a convention by validator, in the same phase whose item 1 exists to
 stop names claiming more than the code computes. The limitation is now normative
-in §24 (`SPEC-13`).
+in §24 (`SPEC-13`); the owner confirmed 2026-09-05 that the anchor shape stays
+intentionally un-prescribed (no work until a real usage pattern exists).
 
 D2 was explained exactly and is ordering, not semantics: the divergent file is
 LowerEnv's *generated*, gitignored `lake-manifest.json`, created when
 `yukon_verify.sh` builds LowerEnv as root; Lake ignores a non-root manifest;
 and the mirror demonstrably built 3747 jobs clean without one throughout
-Phase F. Disposition stays with the owner.
+Phase F. Owner disposition 2026-09-05: document the ordering/side effect (a
+comment in `crrg-lowerenv-mirror`), keep the existing check, no architecture
+change.
 
 The acceptance-tier profile found exactly one duplication (a build performed
 twice across a fixture boundary; removed, `crrg-yukon-v09` @ `6856acf9`, focused
