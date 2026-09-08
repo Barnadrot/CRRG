@@ -633,6 +633,64 @@ expect ok "exit=10" \
   "a terminal noTransition exits 10 -- valid, and not a certified transition (§19.2)" \
   ep_code terminal "$NT" n1 noTransition
 
+# --- §30: what a no-transition says to the researcher ------------------------
+#
+# The failure v0.10 exists for: a researcher read a valid no-transition as
+# permission to stop. Exit 10 and the two-axis semantics are unchanged; the
+# RENDERING is what carries the persistence invariant, so it is checked here on
+# the outcome that gets it AND on the three that must not.
+#
+# `guidance: CONTINUE_RESEARCH` is the machine-readable marker a research loop
+# keys on; the sentences under it are §30's text verbatim. Both are asserted --
+# a marker with the wrong text underneath, or the text with no marker, would each
+# defeat one of the two readers this block has.
+NTG="$EPD/persistence.tsv"
+printf '# CRRG episode log\n' > "$NTG"
+
+# A noTransition exits 10 BY DESIGN, so the status is asserted separately below
+# and these cases assert the rendering. `ep_out` prints the output and returns 0,
+# which keeps `expect ok` honest about what it is checking rather than dressing a
+# valid no-transition up as a rejection.
+ep_out() { "$EP" "$@" 2>&1 || true; }
+
+"$EP" open "$NTG" g1 OBL-G mech-g gen-1 >/dev/null 2>&1
+expect ok "guidance: CONTINUE_RESEARCH" \
+  "a noTransition terminal carries the §30 machine-readable marker" \
+  ep_out terminal "$NTG" g1 noTransition
+
+"$EP" open "$NTG" g2 OBL-G mech-g gen-2 >/dev/null 2>&1
+expect ok "The absence of a known proof technique is the research problem," \
+  "  ...and §30's text, which names ignorance as the problem, not a stop" \
+  ep_out terminal "$NTG" g2 noTransition
+
+"$EP" open "$NTG" g3 OBL-G mech-g gen-3 >/dev/null 2>&1
+expect ok "The exact certified obligation remains OPEN." \
+  "  ...and says the obligation is still OPEN" \
+  ep_out terminal "$NTG" g3 noTransition
+
+# The three outcomes that must NOT carry it. An admitted transition, a rejection
+# and a tooling failure each say something different, and a persistence block on
+# any of them would be telling the researcher to continue past a result that is
+# not a no-transition at all.
+ng_absent() {   # <episode-log> <episode-id> <outcome>
+  local out
+  out="$("$EP" terminal "$1" "$2" "$3" 2>&1)"
+  if grep -q "CONTINUE_RESEARCH" <<<"$out"; then echo "MARKER PRESENT on $3"
+  else echo "no persistence block on $3"; fi
+}
+for _o in admitted-refined rejected toolingFailure; do
+  "$EP" open "$NTG" "x-$_o" OBL-X mech-x gen-x >/dev/null 2>&1
+  expect ok "no persistence block on $_o" \
+    "a $_o terminal carries no §30 block" \
+    ng_absent "$NTG" "x-$_o" "$_o"
+done
+
+# The exit-code contract is untouched by the rendering (§19.2).
+"$EP" open "$NTG" z1 OBL-Z mech-z gen-1 >/dev/null 2>&1
+expect ok "exit=10" \
+  "  ...and the §30 rendering does not disturb the exit code" \
+  ep_code terminal "$NTG" z1 noTransition
+
 expect reject "is not blocked" \
   "refuses a stall response on an obligation that is not blocked" \
   "$EP" respond "$NT" OBL-N reselect

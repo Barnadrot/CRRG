@@ -70,6 +70,31 @@ this script pretends to enforce.
 reports it, `open` enforces it. Opening an episode is launching research, so a
 blocked obligation, or the mechanism that stalled it, is refused at `open` rather
 than merely reported to a caller who is free to ignore the answer.
+
+WHAT COUNTS AS A REASON TO STOP (§29.1)
+---------------------------------------
+A `noTransition` is not one, which is why `terminal` renders §30's persistence
+block on it. An exact OPEN obligation is an active research mandate: lack of a
+known technique is a description of the research problem, not a blocker, and a
+stall changes HOW the system researches rather than authorising it to stop.
+
+A run may stop or pause only for these objective conditions:
+
+    OPERATOR_STOP        authenticated operator instruction
+    TOOLING_BLOCKED      required compiler / repository / execution facility
+                         unavailable after the deployment's defined
+                         retry/recovery policy
+    NO_ADMISSIBLE_WORK   no OPEN schedulable obligation remains under the
+                         certified graph and operator policy
+    PROGRAM_COMPLETE     the project's terminal condition reached and no
+                         automatic next target admissible
+
+A certified closure, refutation, retirement, split or supersession is a state
+TRANSITION, not a reason to stop. **There is no generic `RESEARCH_BLOCKED`
+escape hatch**, and this script provides no way to record one: a deployment that
+finds itself wanting one has an underspecified programme, not a blocker. That is
+documentation of the contract, not a check this tool enforces — the enforcement
+lives in the programme and the gate.
 """
 
 import argparse
@@ -105,6 +130,24 @@ RESPONSES = (
 
 # §19.2: the four terminal states must stay mechanically distinguishable.
 OUTCOME_EXIT = {"noTransition": 10, "rejected": 20, "toolingFailure": 30}
+
+# §30: what a valid no-transition says to the researcher.
+#
+# Exit 10 and the two-axis semantics (§19) are unchanged; what changes is the
+# RENDERING. `guidance: CONTINUE_RESEARCH` is the machine-readable marker a
+# research loop keys on; the lines under it are §30's text verbatim, and are spec
+# text rather than this script's prose -- do not reword them here.
+#
+# Printed only for `noTransition`. An admitted transition, a rejection and a
+# tooling failure each say something different and none of them is this.
+PERSISTENCE_BLOCK = """guidance: CONTINUE_RESEARCH
+NO_TRANSITION
+The exact certified obligation remains OPEN.
+No certified blocker has been established.
+CRRG has accepted no state movement.
+The absence of a known proof technique is the research problem,
+not a stopping condition.
+Continue mathematical research on an admissible OPEN obligation."""
 
 NCOL = 8
 COLUMNS = "kind episode_id obligation_id mechanism_id payload commit created note".split()
@@ -633,6 +676,7 @@ def main() -> int:
             st = replay(rows + [Row(0, fields)], args.threshold)[fields[2]]
             print(f"  no-transition-count: {st['count']}")
             print(f"  blocked: {'yes' if st['blocked'] else 'no'}")
+            print(PERSISTENCE_BLOCK)
         return code
     return EXIT_OK
 
