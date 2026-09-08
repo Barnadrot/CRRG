@@ -4,6 +4,7 @@
 Usage:
     crrg-episode [--threshold N] open       <log> <episode_id> <obligation_id>
                                             <mechanism_id> <start_ref> [note]
+                                            [--mode normal|novelty]
     crrg-episode [--threshold N] checkpoint <log> <episode_id> <ref> [note]
     crrg-episode [--threshold N] terminal   <log> <episode_id> <outcome> [note]
     crrg-episode [--threshold N] respond    <log> <obligation_id> <response> [note]
@@ -158,6 +159,12 @@ EXIT_MALFORMED = 30
 
 DEFAULT_THRESHOLD = 5
 
+# §31.1's deployment default: three completed stall cycles since the last
+# admitted transition put an obligation in NOVELTY_REQUIRED. Mirrors
+# CRRG.Novelty.defaultCycleThreshold. Downstream-configurable is a Phase F
+# concern; there is no flag for it here.
+DEFAULT_CYCLE_THRESHOLD = 3
+
 
 class Malformed(Exception):
     """The log is not a well-formed episode log (exit 30)."""
@@ -217,6 +224,13 @@ def new_obligation_state():
         "pending_trigger": None,
         # Mechanism a launch is currently refused for; spent by the next OPEN.
         "armed": None,
+        # §31's second order: completed stall cycles since the last admitted
+        # transition. A cycle is a block event followed by its recorded
+        # response, so this is incremented by `apply_response` -- which the
+        # replay reaches only for a response recorded WHILE BLOCKED, because
+        # rule 4 rejects any other. That is the coupling CRRG.Novelty
+        # deliberately leaves to the deployment; this is the deployment.
+        "cycles": 0,
     }
 
 
@@ -325,6 +339,9 @@ def apply_terminal(st, outcome: str, mechanism: str, threshold: int) -> None:
         st["blocked"] = False
         st["pending_trigger"] = None
         st["armed"] = None
+        # §31.4: the second order resets on the same event, by the same rule.
+        # Mirrors CRRG.Novelty.CycleState.admittedReset.
+        st["cycles"] = 0
     elif outcome == "noTransition":
         st["count"] += 1
         was_blocked = st["blocked"]
@@ -338,6 +355,11 @@ def apply_terminal(st, outcome: str, mechanism: str, threshold: int) -> None:
 
 def apply_response(st, response: str) -> None:
     st["blocked"] = False
+    # A block event followed by its recorded response IS one completed cycle
+    # (§31.1). The replay only gets here for a response recorded while blocked,
+    # so reaching this line is exactly the condition. Mirrors
+    # CRRG.Novelty.CycleState.completeCycle.
+    st["cycles"] += 1
     if response != "ownerOverride" and st["pending_trigger"] is not None:
         # The first response that is not an owner override arms an immediate
         # rejection against the mechanism that stalled.
@@ -434,12 +456,39 @@ def cmd_validate(args, rows, _obligations) -> int:
     return EXIT_OK
 
 
+def novelty_required(st) -> bool:
+    """§31.1: at or past the cycle threshold since the last admitted transition.
+
+    Mirrors CRRG.Novelty.CycleState.required — a threshold, not a multiple. The
+    first-order block fires on every multiple of its threshold; this one, once
+    reached, stays until an admitted transition resets it.
+    """
+    return DEFAULT_CYCLE_THRESHOLD <= st["cycles"]
+
+
+def obligation_mode(st) -> str:
+    """NORMAL | STALLED | NOVELTY_REQUIRED.
+
+    STALLED WINS over NOVELTY_REQUIRED when both hold, and the order is the
+    point: a blocked obligation is answered by recording a response, not by
+    declaring a mode. Showing NOVELTY_REQUIRED to a researcher who first has to
+    respond would name the wrong next action.
+    """
+    if st["blocked"]:
+        return "STALLED"
+    if novelty_required(st):
+        return "NOVELTY_REQUIRED"
+    return "NORMAL"
+
+
 def print_obligation(oid: str, st) -> None:
     print(f"obligation {oid}")
     print(f"  no-transition-count: {st['count']}")
     print(f"  blocked: {'yes' if st['blocked'] else 'no'}")
     print(f"  open-episode: {st['open_episode'] or '-'}")
     print(f"  armed-mechanism: {st['armed'] or '-'}")
+    print(f"  cycles: {st['cycles']}")
+    print(f"  mode: {obligation_mode(st)}")
 
 
 def cmd_status(args, _rows, obligations) -> int:
@@ -464,12 +513,18 @@ def cmd_status(args, _rows, obligations) -> int:
     return EXIT_OK
 
 
-def launch_refusal(st, obligation_id: str, mechanism_id: str, threshold: int):
-    """The §22 launch guard. Returns a reason string, or None to permit.
+def launch_refusal(st, obligation_id: str, mechanism_id: str, threshold: int,
+                   novelty_mode: bool = False):
+    """The §22 and §31.4 launch guard. Returns a reason string, or None to permit.
 
-    One implementation, shared by `may-launch` (which reports it) and `open`
+    ONE implementation, shared by `may-launch` (which reports it) and `open`
     (which enforces it). A guard that answers one way when asked and another way
-    when acted on is not a guard.
+    when acted on is not a guard, and §31.4 puts its enforcement at the same
+    point as §22's, so it belongs here rather than in a second check beside it.
+
+    `novelty_mode` defaults False, which is what `may-launch` asks with: it is a
+    query about the obligation, and a caller that has not declared novelty mode
+    gets the answer for a normal-mode launch.
     """
     if st["blocked"]:
         return (
@@ -482,6 +537,21 @@ def launch_refusal(st, obligation_id: str, mechanism_id: str, threshold: int):
             f"same mechanism immediately after stall: {mechanism_id!r} is the "
             f"mechanism that stalled obligation {obligation_id!r}. Continue under a "
             "different recorded mechanism, or record an ownerOverride (§22)."
+        )
+    # §31.4, checked after the first-order refusals on purpose: while an
+    # obligation is blocked the required action is a response, and naming the
+    # mode instead would send the researcher to the wrong one. Mirrors
+    # CRRG.Novelty.CycleState.modeAllowed.
+    if novelty_required(st) and not novelty_mode:
+        return (
+            f"NOVELTY_REQUIRED: obligation {obligation_id!r} has completed "
+            f"{st['cycles']} stall cycles since its last admitted transition "
+            f"(threshold {DEFAULT_CYCLE_THRESHOLD}), so repeated attempts under "
+            "recorded mechanisms have not produced certified movement. Open in "
+            "novelty mode -- `--mode novelty` -- and invent mathematics capable "
+            "of attacking the exact obligation (§31.3). This is not an "
+            "escalation and not a stop: it changes the mode of research, not "
+            "its continuation (§31.2)."
         )
     return None
 
@@ -511,13 +581,23 @@ def cmd_open(args, _rows, obligations, before: str):
     # override is a row in the append-only log that an auditor can see -- not a
     # command-line argument that leaves no trace.
     st = obligations.get(args.obligation_id) or new_obligation_state()
-    reason = launch_refusal(st, args.obligation_id, args.mechanism_id, args.threshold)
+    novelty = args.mode == "novelty"
+    reason = launch_refusal(st, args.obligation_id, args.mechanism_id, args.threshold,
+                            novelty_mode=novelty)
     if reason is not None:
         print(f"EPISODE OPEN REJECTED: {reason}", file=sys.stderr)
         sys.exit(EXIT_REJECT)
 
+    # Audit evidence that this episode was opened in novelty mode, recorded in
+    # the note field -- a value in a column that already exists, not a schema
+    # change. Without it "the researcher declared novelty mode" would be a claim
+    # with nothing behind it in the append-only log.
+    note = clean_note(args.note)
+    if novelty:
+        note = "mode=novelty" if note == "-" else f"mode=novelty {note}"
+
     return ["OPEN", args.episode_id, args.obligation_id, args.mechanism_id,
-            args.start_ref, head_commit(), now_utc(), clean_note(args.note)]
+            args.start_ref, head_commit(), now_utc(), note]
 
 
 def episode_row(rows, episode_id: str):
@@ -599,7 +679,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("obligation_id")
     p.add_argument("mechanism_id")
     p.add_argument("start_ref")
+    # A trailing positional cannot follow a value-bearing flag in argparse, so an
+    # optional note goes BEFORE `--mode`. Documented in the usage header.
     p.add_argument("note", nargs="?", default="-")
+    p.add_argument("--mode", default="normal", choices=("normal", "novelty"),
+                   help="research mode for this episode; `novelty` is required "
+                        "while the obligation is NOVELTY_REQUIRED (§31.4)")
 
     p = sub.add_parser("checkpoint")
     p.add_argument("log")

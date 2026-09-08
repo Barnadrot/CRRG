@@ -777,6 +777,103 @@ expect ok "recorded: OPEN" \
   "open accepts the same mechanism after an ownerOverride response" \
   "$EP" open "$OVR" f9 OBL-S mech-a gen-9
 
+# --- §31: the second order ---------------------------------------------------
+#
+# The first-order machine can itself circle: stall, respond with a new mechanism,
+# no transition, stall again. §31 counts COMPLETED CYCLES -- a block event
+# followed by its recorded response -- and at three, since the last admitted
+# transition, the obligation demands novelty mode.
+#
+# This walk is the same sequence the Lean examples in Test/Synthetic/Novelty.lean
+# run against `CRRG.Novelty.CycleState`. They must agree: the replay is a mirror
+# of that machine, and a drift in cycle-vs-strike counting should show up as a
+# disagreement between these two rather than as a silent difference.
+CYC="$EPD/cycles.tsv"
+printf '# CRRG episode log\n' > "$CYC"
+cycle_once() {   # five no-transitions, then the response that completes a cycle
+  local n="$1" i
+  for i in 1 2 3 4 5; do
+    "$EP" open "$CYC" "k$n-$i" OBL-C2 "mech-$n" gen >/dev/null 2>&1
+    "$EP" terminal "$CYC" "k$n-$i" noTransition >/dev/null 2>&1
+  done
+  "$EP" respond "$CYC" OBL-C2 newMechanism >/dev/null 2>&1
+}
+
+cycle_once 1
+cycle_once 2
+expect ok "cycles: 2" \
+  "two completed stall cycles are counted" \
+  "$EP" status "$CYC" OBL-C2
+expect ok "mode: NORMAL" \
+  "  ...and two is not yet NOVELTY_REQUIRED" \
+  "$EP" status "$CYC" OBL-C2
+
+cycle_once 3
+expect ok "cycles: 3" \
+  "the third completed cycle is counted" \
+  "$EP" status "$CYC" OBL-C2
+expect ok "mode: NOVELTY_REQUIRED" \
+  "  ...and three puts the obligation in NOVELTY_REQUIRED (§31.1)" \
+  "$EP" status "$CYC" OBL-C2
+
+expect reject "NOVELTY_REQUIRED: obligation" \
+  "a normal-mode open on a required obligation is refused (§31.4)" \
+  "$EP" open "$CYC" nx OBL-C2 mech-x gen
+
+expect ok "recorded: OPEN" \
+  "  ...and a novelty-mode open is accepted" \
+  "$EP" open "$CYC" nv OBL-C2 mech-x gen --mode novelty
+
+# The declaration has to survive in the log, or "it was opened in novelty mode"
+# is a claim with nothing behind it. It rides in the note field -- a value in a
+# column that already exists, not a schema change.
+cyc_note() { awk -F'\t' '$1 == "OPEN" && $2 == "nv" { print "note:", $8 }' "$CYC"; }
+expect ok "note: mode=novelty" \
+  "  ...and the novelty declaration is recorded in that row's note" cyc_note
+cyc_note_count() { grep -c "mode=novelty" "$CYC"; }
+expect ok "1" \
+  "  ...on exactly one row -- normal-mode opens carry no such claim" cyc_note_count
+
+# §31.4: certified movement clears the second order by the same rule it clears
+# the first. Both counters, one event.
+"$EP" terminal "$CYC" nv admitted-refined >/dev/null 2>&1
+expect ok "cycles: 0" \
+  "an admitted terminal resets the cycle count (§31.4)" \
+  "$EP" status "$CYC" OBL-C2
+expect ok "no-transition-count: 0" \
+  "  ...and the no-transition count with it" \
+  "$EP" status "$CYC" OBL-C2
+expect ok "mode: NORMAL" \
+  "  ...so the obligation is back to NORMAL" \
+  "$EP" status "$CYC" OBL-C2
+expect ok "recorded: OPEN" \
+  "  ...and a normal-mode open is permitted again" \
+  "$EP" open "$CYC" post OBL-C2 mech-z gen
+
+# STALLED WINS over NOVELTY_REQUIRED in the display. A blocked obligation is
+# answered by recording a response, not by declaring a mode, so naming the mode
+# first would send the researcher to the wrong next action.
+BOTH="$EPD/both.tsv"
+printf '# CRRG episode log\n' > "$BOTH"
+CYC_SAVE="$CYC"; CYC="$BOTH"
+cycle_once 1; cycle_once 2; cycle_once 3
+CYC="$CYC_SAVE"
+# Three cycles done, then five more no-transitions to block it again. These opens
+# must declare novelty mode -- the obligation is already NOVELTY_REQUIRED, so a
+# normal-mode open is refused and no terminal would be recorded at all. Writing
+# this fixture the naive way produced an obligation that never re-blocked, which
+# is §31.4 working exactly as intended.
+for i in 1 2 3 4 5; do
+  "$EP" open "$BOTH" "b-$i" OBL-C2 mech-b gen --mode novelty >/dev/null 2>&1
+  "$EP" terminal "$BOTH" "b-$i" noTransition >/dev/null 2>&1
+done
+expect ok "cycles: 3" \
+  "an obligation can be both blocked and past the cycle threshold" \
+  "$EP" status "$BOTH" OBL-C2
+expect ok "mode: STALLED" \
+  "  ...and STALLED wins the display: respond first, then choose a mode" \
+  "$EP" status "$BOTH" OBL-C2
+
 
 echo ""
 echo "crrg-mechanism (mechanism records, Spec §24):"

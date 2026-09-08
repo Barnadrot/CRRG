@@ -15,3 +15,4 @@ import Test.Synthetic.NegativeTests
 import Test.Synthetic.Transition
 import Test.Synthetic.Outcome
 import Test.Synthetic.Stall
+import Test.Synthetic.Novelty

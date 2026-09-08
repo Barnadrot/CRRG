@@ -12,3 +12,4 @@ import CRRG.Audit
 import CRRG.Transition
 import CRRG.Outcome
 import CRRG.Stall
+import CRRG.Novelty
