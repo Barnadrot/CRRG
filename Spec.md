@@ -1491,20 +1491,20 @@ Stop for owner review before live relaunch under v0.10 semantics.
 
 ## 36. Acceptance criteria for v0.10
 
-- [ ] An OPEN obligation with a valid no-transition leaves the loop authorized to continue, and the research-facing response carries the §30 persistence semantics.
-- [ ] Five terminal no-transitions on one canonical obligation trigger `STALLED` (§22, unchanged).
-- [ ] After a stall response, research may continue under a permitted changed action.
-- [ ] Three completed stall-response cycles without an admitted transition trigger `NOVELTY_REQUIRED`.
-- [ ] `NOVELTY_REQUIRED` never produces STOP and never escalates a mathematical choice to the owner; it opens only novelty-mode episodes.
-- [ ] An admitted transition clears stall-cycle and novelty-required state for the materially changed obligation.
-- [ ] A tooling failure increments no stall count and no cycle count.
-- [ ] The agent cannot create an operator override by itself.
-- [ ] Mathematical-ignorance text ("a new theorem is required", "the literature stops here", "further work is machinery production") creates no blocker state.
-- [ ] A refused launch leaves a `REFUSED_LAUNCH` audit event; no episode exists; no counter moved.
-- [ ] A research commit during an open episode is recorded as a checkpoint automatically, or the deployment has declared git authoritative and retired the row type.
-- [ ] An adjudication with multiple certified effects produces one research episode and an apply event recording every effect.
-- [ ] Old CRRG core semantics, seals, and the v0.9 records remain valid; nothing historical is rewritten.
-- [ ] The new machinery adds no full-gate invocation and stays within the §11.1/§18.2 budgets.
+- [x] An OPEN obligation with a valid no-transition leaves the loop authorized to continue, and the research-facing response carries the §30 persistence semantics. — `CHG-40`, auditor-run gate
+- [x] Five terminal no-transitions on one canonical obligation trigger `STALLED` (§22, unchanged).
+- [x] After a stall response, research may continue under a permitted changed action.
+- [x] Three completed stall-response cycles without an admitted transition trigger `NOVELTY_REQUIRED`. — `CHG-41`; live lane: both live obligations in that state
+- [x] `NOVELTY_REQUIRED` never produces STOP and never escalates a mathematical choice to the owner; it opens only novelty-mode episodes. — F.1 preflight fix, auditor-verified
+- [x] An admitted transition clears stall-cycle and novelty-required state for the materially changed obligation. — `CHG-41`, `CHG-42`
+- [x] A tooling failure increments no stall count and no cycle count. — `CHG-35`
+- [ ] The agent cannot create an operator override by itself. — **NOT mechanically enforced in v0.10**: `respond … ownerOverride` is recordable by whoever runs the tool; the posture is tamper-evident (the row is append-only and attributed in git history), not tamper-proof. An authenticated-override channel is open work (owner decision).
+- [x] Mathematical-ignorance text ("a new theorem is required", "the literature stops here", "further work is machinery production") creates no blocker state. — no such code path exists; §29.1 + the programme wording
+- [x] A refused launch leaves a `REFUSED_LAUNCH` audit event; no episode exists; no counter moved. — `CHG-42`
+- [x] A research commit during an open episode is recorded as a checkpoint automatically, or the deployment has declared git authoritative and retired the row type. — `CHG-42` (gate-derived from branch history)
+- [x] An adjudication with multiple certified effects produces one research episode and an apply event recording every effect. — `CHG-42`; Phase F fixture
+- [x] Old CRRG core semantics, seals, and the v0.9 records remain valid; nothing historical is rewritten. — legacy `admitted-*` rows validate; gates green
+- [x] The new machinery adds no full-gate invocation and stays within the §11.1/§18.2 budgets — **with one disclosed exception**: the F.1 two-granularity rule is pinned by one full-gate fixture (the verdict tail exists only on full runs; ~45 s); the orchestration-state tests themselves run in seconds. The downstream acceptance tier measures ~1411 s on the grown corpus (owner's disposition pending).
 
 The key sentence this revision exists to enforce:
 

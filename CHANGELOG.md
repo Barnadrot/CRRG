@@ -256,6 +256,25 @@ winner-takes-all token ladder); automatic commit-derived checkpoints; and
 `REFUSED_LAUNCH` audit events. The owner-decision boundary is now explicit
 (§34). The mathematical core is untouched; deployment is forward-only.
 
+#### `CHG-44` — v0.10 downstream integration and Phase G (Phases F–G)
+
+The Yukon integration of v0.10 landed on `crrg-yukon-v010` (forked at the live tip
+`89595012c`): the gate's terminal token is adjudication-level with effects recorded
+as APPLY rows (the token ladder retired, §32); the §30 persistence block renders on
+every no-transition exit (byte-identical to the spec, pinned by a static selftest);
+the launch config carries the modes table (all three modes to the current adapter
+until the owner re-maps); `CRRG_PERSISTENCE_FROM` marks the forward boundary. Two
+audit-caught spec violations were fixed in review (F.1): pre-flight may not halt the
+lane on NOVELTY_REQUIRED (§31.2 — the instrumented evidence showed both live
+obligations already in that state, so the bug would have stopped the lane on its
+next launch), and banked-only imports never touch episode counters (F.1's
+two-granularity rule restored under the §32 model). The acceptance tier measures
+1410.9s instrumented on the grown corpus — five groups carry 89.6%, the cost is the
+number of full production gates, and the disposition is the owner's. The programme
+file's v0.10 wording (Phase G) was authored and applied by the spec owner directly,
+per the standing rule. `lower-floor.tsv` was raised to the vendored 6803 by owner
+decision (both fields — the second caught missing by the vendor selftest group).
+
 #### `CHG-43` — the generic launch-mode signal (v0.10 Phase E)
 
 `crrg-live-run` gains `--mode normal|stalled|novelty` (§31.5): the downstream
