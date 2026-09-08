@@ -208,7 +208,8 @@ the staged implementation plan (§15). Do not reconcile the two.
 |-----|-------------|--------|-----|
 | 30 | persistence rendering on no-transition (`guidance: CONTINUE_RESEARCH` + §30 text verbatim) | DONE (generic) | `CHG-40` |
 | 31 | NOVELTY_REQUIRED: cycle counter + mode enforcement at `open` | DONE (generic) | `CHG-41` |
-| 29, 32–34 | blocker taxonomy, episode/APPLY model, automatic checkpoints, refusal logging, owner-boundary | IN PROGRESS | spec `SPEC-14`; Phases D–F pending |
+| 32, 33 | APPLY events, adjudication-level terminal token, refusal logging, automatic checkpoints | DONE (generic) | `CHG-42` |
+| 29, 34 | blocker taxonomy wiring + owner-boundary enforcement downstream | DOWNSTREAM | Phase F–G pending |
 
 ---
 
@@ -254,6 +255,23 @@ episode; state effects recorded as an apply-event list, retiring the
 winner-takes-all token ladder); automatic commit-derived checkpoints; and
 `REFUSED_LAUNCH` audit events. The owner-decision boundary is now explicit
 (§34). The mathematical core is untouched; deployment is forward-only.
+
+#### `CHG-42` — episode events: APPLY, REFUSED_LAUNCH, derived checkpoints (v0.10 Phase D)
+
+§32/§33 land in `crrg-episode`. `APPLY` rows record the full effect list of an
+admitted adjudication (§19.1's seven kinds; only on episodes closed admitted;
+never counted — the replay branch touches no obligation state at all, so the
+property is enforced, not remembered). The terminal token gains bare `admitted`
+(adjudication-level); legacy `admitted-<kind>` stays valid, and one `is_admitted`
+predicate answers for both so they cannot drift. A refusing `open` appends a
+`REFUSED_LAUNCH` row (reason class and human message from one source, so they
+cannot disagree) — enforcement now leaves an audit trail. And checkpoints are
+derived at `terminal` from the branch's own history: every commit in
+`(open_commit, HEAD]` not already recorded, deduped by full SHA, checkpoint rows
+preceding the terminal; derivation failure is exit 30 with nothing appended.
+Auditor-verified on an independent 19-point fixture, including counter-inertness
+of both new row kinds. Note: the apply-on-non-admitted refusal exits 30 (rule
+violation), consistent with the whole-log discipline.
 
 #### `CHG-41` — NOVELTY_REQUIRED: the second-order state (v0.10 Phase C)
 
