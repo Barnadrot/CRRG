@@ -228,6 +228,25 @@ anchor is declarative and fingerprint-covered but unresolved, because v0.9
 prescribes no anchor shape and a checker without a prescribed shape invents a
 convention rather than verifies one.
 
+#### `SPEC-14` — v0.10.0-draft: persistence and novelty pressure
+
+Live operation under v0.9 answered the question v0.9 left open: the machinery made
+movement honest and circling visible, and the researcher's failure mode moved one
+level up — it stopped, on a self-authored blocker ("further commits would be the
+treadmill") that the programme already forbade, and it delegated mathematical
+choices upward. `Spec.md` gains §28–§36: the research-persistence invariant (an
+OPEN obligation is a mandate; mathematical ignorance is never a blocker; the
+objective blocker taxonomy has no `RESEARCH_BLOCKED` hatch); the `PROVE IT`
+rendering of `NO_TRANSITION`; the second-order `NOVELTY_REQUIRED` state (three
+completed stall cycles, per obligation, reset by admitted movement) defined as a
+research-mode switch and **never** an owner escalation — the owner-reviewed
+correction to the auditor's live-review proposal, which would have made
+escalation an exit; the episode/APPLY model (one terminal adjudication per
+episode; state effects recorded as an apply-event list, retiring the
+winner-takes-all token ladder); automatic commit-derived checkpoints; and
+`REFUSED_LAUNCH` audit events. The owner-decision boundary is now explicit
+(§34). The mathematical core is untouched; deployment is forward-only.
+
 #### `CHG-39` — finalization: the evidence rename, the anchor limitation, the runtime profile
 
 `crrg-evidence`: `CONSUMED_BY_CERTIFIED_TRANSITION` → `IN_ADMITTED_EPISODE`,

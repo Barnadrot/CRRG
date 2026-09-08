@@ -1,7 +1,7 @@
 # Certified Research Reduction Graph (CRRG)
 ## Kernel-checked research reduction and agent credit assignment
 
-**Status:** v0.9.0 — the v0.9 orchestration layer (§18–§27) is implemented, audited, and **live on the Yukon lane** (`proximity-research` `crrg-yukon` @ `8fc55432`); External Review 2 complete; bounded active autoresearch under v0.9 semantics.  
+**Status:** v0.10.0-draft — the persistence layer is specified (§28–§36), implementation pending; v0.9.0 is live on the Yukon lane (`crrg-yukon` @ `8fc55432`); External Review 2 complete.  
 **Authority:** this file is the sole normative CRRG design / execution document. `CHANGELOG.md` records history and implementation findings; it does not choose targets or override this spec. Downstream notes are evidence only.  
 **Repository architecture:** CRRG is a standalone general-purpose Lean repository consumed as a pinned dependency by research projects.  
 **First integration / research test:** `Barnadrot/proximity-research`, using controlled Yukon lower-bound history before any CRRG-directed live Soundness work.  
@@ -1302,3 +1302,210 @@ v0.9 is ready for downstream live testing only when every item is true. These jo
 - [x] Historical Yukon iterations are not rewritten (§23). — `CHG-38`
 
 Stop for owner review after Phase F before launching live autoresearch under v0.9 semantics.
+
+---
+
+## 28. v0.10 — persistence and novelty pressure: purpose, evidence, scope
+
+v0.9 made certified research-state movement honest and made circling visible. It did not make research *persistent*: three days of live operation showed the failure mode directly. The researcher concluded — in a system whose programme already says "do not stop because the mathematics is novel, absent from the literature, hard, or because the last attack failed" — that further commits "would be the treadmill", and stopped. Mathematical ignorance was converted into a self-authored exit. Separately, the first-order stall machinery cycled as designed but without a second order: one obligation accumulated 23 strikes and 4 recorded responses with no structural consequence.
+
+v0.10's invariant:
+
+> **An exact OPEN obligation is an active research mandate. Lack of a known technique is not a blocker. Stalling changes how the system researches; it does not authorize the researcher to stop.**
+
+What does not change: the mathematical core (`Goal`, `Edge`, `Split`, `Frontier`, `Frontier.Transition`), the candidate lifecycle, seals, axiom policy, root immutability, external bank/supersession semantics, the two-axis outcome model (§19), the first-order stall detector (§22), and the novelty-evidence substrate with no scores (§25). v0.10 is an orchestration/persistence layer on top of them. Any Lean-core addition needs a stated mathematical reason.
+
+---
+
+## 29. The research-persistence invariant
+
+While all of the following hold, a live autonomous research programme **must remain active**:
+
+```text
+at least one exact admissible obligation is OPEN
+no certified result has eliminated that obligation
+the operator has not explicitly stopped the project
+required tooling is operational
+```
+
+The following are **not blockers**. They are descriptions of the research problem:
+
+```text
+"I do not know how to prove this."
+"No known theorem gives the required bound."
+"This appears to require a new invariant."
+"The literature stops here."
+"A stronger candidate might be false."
+"I need to choose constants."
+"I have exhausted known methods."
+"Further work would require novel mathematics."
+"Continuing would be machinery production."
+```
+
+### 29.1 Objective blocker taxonomy
+
+A research run may stop or pause only for a small explicit class of objective conditions:
+
+```text
+OPERATOR_STOP        authenticated operator instruction
+TOOLING_BLOCKED      required compiler / repository / execution facility unavailable
+                     after the deployment's defined retry/recovery policy
+NO_ADMISSIBLE_WORK   no OPEN schedulable obligation remains under the certified
+                     graph and operator policy
+PROGRAM_COMPLETE     the project's terminal condition reached and no automatic
+                     next target admissible
+```
+
+A certified closure, refutation, retirement, split, or supersession is a state transition, not a reason for the programme to stop. **There is no generic `RESEARCH_BLOCKED` escape hatch.** A deployment that finds itself wanting one has an underspecified programme, not a blocker.
+
+---
+
+## 30. The research-facing response to NO_TRANSITION
+
+The two-axis semantics (§19) and exit code 10 are unchanged. What changes is the rendering to the researcher. A valid no-transition must say, in machine-readable form plus concise text:
+
+```text
+NO_TRANSITION
+The exact certified obligation remains OPEN.
+No certified blocker has been established.
+CRRG has accepted no state movement.
+The absence of a known proof technique is the research problem,
+not a stopping condition.
+Continue mathematical research on an admissible OPEN obligation.
+```
+
+A research loop must not interpret exit 10 as termination, and an integrity-only green result must never be presented as grounds to stop either. The downstream programme wording lands at integration (§35's phases); the contract is normative now.
+
+---
+
+## 31. NOVELTY_REQUIRED — the second-order state
+
+The v0.9 stall detector is first-order: five terminal no-transitions on one canonical obligation force a recorded response. Live evidence shows the first-order cycle can itself circle: stall → new mechanism → no transition → stall. v0.10 adds the second order.
+
+### 31.1 Definition
+
+Per canonical obligation, count **completed stall cycles**: a cycle is a block event followed by its recorded response (§22). When the count of completed cycles since the last admitted transition on that obligation reaches the deployment default of **3** (downstream-configurable), the obligation enters `NOVELTY_REQUIRED`.
+
+### 31.2 What it means, and what it does not
+
+`NOVELTY_REQUIRED` is an orchestration fact: repeated attempts under recorded mechanisms have failed to produce certified movement, so the next research on this obligation must prioritize inventing a new mathematical mechanism over further routine formalization around the same obstruction.
+
+It is **not** a mathematical novelty certificate. It asserts nothing about whether the needed theorem is objectively novel, whether the literature contains a solution, or whether previous mechanism records are semantically exhaustive.
+
+It is **not an escalation**. `NOVELTY_REQUIRED` never asks the owner to choose mathematics and never pauses research. It changes the *mode* of research, not its continuation.
+
+### 31.3 The novelty-mode research contract
+
+An episode opened on a `NOVELTY_REQUIRED` obligation is a novelty-mode episode. Its contract to the researcher:
+
+```text
+INPUT   the exact OPEN proposition; immutable root lineage; certified ancestors
+        and current frontier; the previous mechanism records with their exact
+        basis declarations; relevant research-evidence records; certified
+        refutations / counterexamples / failed candidates; the current
+        obstruction summary
+
+TASK    invent and test mathematics capable of attacking the exact obligation.
+        Not: rephrase the obstruction; formalize another standard consequence;
+        repeat a prior mechanism under a new name; stop because a new theorem
+        is required; return mathematical choices to the operator.
+        Seek: a new invariant, construction, decomposition, estimate,
+        representation, contradiction, or other substantive mechanism.
+
+OUTPUT  preferably one of: a proof of the exact obligation; a certified
+        refinement / split; a certified refutation; an exact new candidate
+        proposition with a concrete rootward route; a falsifier eliminating a
+        significant mechanism; a concrete first theorem of a new attack.
+```
+
+CRRG does not judge whether the output is truly novel (§25's substrate records; §26's R1 remains deferred).
+
+### 31.4 Enforcement and reset
+
+Enforcement sits at the same point as §22's: `crrg-episode open`. While an obligation is in `NOVELTY_REQUIRED`, a normal-mode open is refused; the open must declare novelty mode. The obligation leaves `NOVELTY_REQUIRED` when an admitted transition materially changes, closes, or retires it — the same reset rule as §22, proved on the same state.
+
+### 31.5 Launch modes are downstream policy
+
+The scheduler signal is generic: `NORMAL_RESEARCH` / `STALLED_RESEARCH` / `NOVELTY_REQUIRED`. A deployment may map modes to different executor configurations (a higher-effort reasoner, a different model family, parallel independent researchers, a synthesis/review swarm). CRRG core knows no vendors, model names, or flags; the mapping lives in the downstream launch configuration (§16.6.1's adapter mechanism).
+
+---
+
+## 32. Adjudication and application: episodes and APPLY events
+
+v0.9's live deployment produced, organically, a two-episode pattern for `REFINED`-then-activate (a research episode, then an activation episode under a second mechanism id). v0.10 standardizes the underlying reality and retires the pattern:
+
+```text
+RESEARCH EPISODE
+  → one terminal adjudication (§19's two axes, unchanged)
+  → if ADMITTED: APPLY event(s) recording every certified effect committed
+```
+
+`APPLY` is bookkeeping and state mutation, not research, and never opens an episode. An apply event records the *full* effect list — frontier refinement (naming edge or split), child closure, candidate resolution, retirement, epoch advance, external admission — rather than forcing simultaneous certified effects through one winner-takes-all token. This supersedes the §16.7-era practice of a separate activation episode and the F.1-era most-specific-first token ladder: the episode's terminal token expresses the adjudication; the apply event expresses the state movement; neither masquerades as the other.
+
+The stall detector and the second-order counter read the adjudication axis only. Apply events never increment either.
+
+---
+
+## 33. Automatic checkpoints; refusal logging
+
+Voluntary checkpoint bookkeeping failed in live operation (zero voluntary rows in three days; research evidence landed as ordinary git commits instead). v0.10 removes the discipline burden:
+
+1. While an episode is open, a research commit on the deployment branch that is not the episode's terminal commit **is** a checkpoint of that episode and is recorded as one automatically — the gate (and the episode-close path) derives checkpoint rows from the branch's own history since the episode opened, so the record cannot be skipped. Checkpoint rows change nothing: no stall increment, no certified-state mutation, no task-selection restart (§23 unchanged in substance). If this derivation proves mechanically unreliable in a deployment, the deployment declares git the authoritative checkpoint history and the row type is retired there — an unused ceremonial mechanism is not kept.
+2. A refused launch leaves a trace: a `REFUSED_LAUNCH` event appended at refusal time, carrying the obligation, the mechanism, the reason class, and the state reference. It opens no episode, produces no outcome, changes no mathematical state, and increments no counter. Its purpose is audit: enforcement that fires must be distinguishable from enforcement that never fires.
+
+---
+
+## 34. The owner-decision boundary
+
+v0.10 makes the boundary explicit because live operation showed the agent delegating mathematical decisions upward (which is also the escalation-as-exit failure in embryo).
+
+The research agent decides: proof technique; candidate theorem; constants inside a candidate; which admissible open obligation to attack; which certified ancestor to revisit; which mechanism to abandon; which conjecture to test; which strengthening to try; which computation decides a mathematical claim; which certified refinement to propose. If a candidate might be false, test it — that is research.
+
+The owner decides: project/root policy; trust and axiom policy; operator bans; resource policy; external-import policy; stopping the programme; resolving an actual governance ambiguity.
+
+The agent must not present a choice between two mathematically admissible options to the owner unless choosing one would mutate owner-governed policy.
+
+---
+
+## 35. v0.10 deployment: forward-only, runtime, phases
+
+Historical iterations (1–116 at this writing) are not rewritten. New semantics begin at a declared boundary (`CRRG_PERSISTENCE_FROM=<commit/episode>`) in each deployment.
+
+Runtime: the second-order state, refusal logging, checkpoint derivation, and apply-event logging are orchestration bookkeeping and must cost seconds, with **no new full-gate invocation** introduced to test them; the production gate stays at its current cost; the §11.1/§18.2 budgets remain normative.
+
+Implementation order, spec-owner directed:
+
+```text
+A  spec only (this revision)
+B  persistence invariant + objective blocker semantics, outcome rendering contract
+C  second-order NOVELTY_REQUIRED state (generic)
+D  episode/APPLY/refusal/checkpoint model (generic)
+E  generic launch-mode signal
+F  Yukon integration
+G  live programme wording (OPEN / STALLED / NOVELTY_REQUIRED / PROVE IT)
+```
+
+Stop for owner review before live relaunch under v0.10 semantics.
+
+---
+
+## 36. Acceptance criteria for v0.10
+
+- [ ] An OPEN obligation with a valid no-transition leaves the loop authorized to continue, and the research-facing response carries the §30 persistence semantics.
+- [ ] Five terminal no-transitions on one canonical obligation trigger `STALLED` (§22, unchanged).
+- [ ] After a stall response, research may continue under a permitted changed action.
+- [ ] Three completed stall-response cycles without an admitted transition trigger `NOVELTY_REQUIRED`.
+- [ ] `NOVELTY_REQUIRED` never produces STOP and never escalates a mathematical choice to the owner; it opens only novelty-mode episodes.
+- [ ] An admitted transition clears stall-cycle and novelty-required state for the materially changed obligation.
+- [ ] A tooling failure increments no stall count and no cycle count.
+- [ ] The agent cannot create an operator override by itself.
+- [ ] Mathematical-ignorance text ("a new theorem is required", "the literature stops here", "further work is machinery production") creates no blocker state.
+- [ ] A refused launch leaves a `REFUSED_LAUNCH` audit event; no episode exists; no counter moved.
+- [ ] A research commit during an open episode is recorded as a checkpoint automatically, or the deployment has declared git authoritative and retired the row type.
+- [ ] An adjudication with multiple certified effects produces one research episode and an apply event recording every effect.
+- [ ] Old CRRG core semantics, seals, and the v0.9 records remain valid; nothing historical is rewritten.
+- [ ] The new machinery adds no full-gate invocation and stays within the §11.1/§18.2 budgets.
+
+The key sentence this revision exists to enforce:
+
+> **CRRG must never allow "this requires new mathematics" to become a stopping condition while an exact admissible obligation remains OPEN.**
