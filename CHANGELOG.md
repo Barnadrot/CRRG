@@ -200,7 +200,15 @@ the staged implementation plan (§15). Do not reconcile the two.
 | 23 | episode / checkpoint records: append-only log, one terminal per episode, forward-only | DONE (generic tooling) | `CHG-36` |
 | 24 | mechanism registry: append-only, fingerprint over semantic fields only, basis resolve-check | DONE (generic tooling) | `CHG-36` |
 | 25 | novelty evidence substrate: append-only records, log-local classification, labels inert, isolation from certified state | DONE (generic tooling) | `CHG-37` |
-| 18.3 | Phase F Yukon integration: two-axis gate, obligation view, episode/stall adoption, frozen set preserved | DONE (branch `crrg-yukon-v09`, audited; merge pending owner) | `CHG-38` |
+| 18.3 | Phase F Yukon integration: two-axis gate, obligation view, episode/stall adoption, frozen set preserved | DONE (merged `crrg-yukon` @ `8fc55432`, 2026-09-05) | `CHG-38` |
+
+### v0.10 (current spec numbering §28–§36; rows added as phases land)
+
+| Req | Requirement | Status | Ref |
+|-----|-------------|--------|-----|
+| 30 | persistence rendering on no-transition (`guidance: CONTINUE_RESEARCH` + §30 text verbatim) | DONE (generic) | `CHG-40` |
+| 31 | NOVELTY_REQUIRED: cycle counter + mode enforcement at `open` | DONE (generic) | `CHG-41` |
+| 29, 32–34 | blocker taxonomy, episode/APPLY model, automatic checkpoints, refusal logging, owner-boundary | IN PROGRESS | spec `SPEC-14`; Phases D–F pending |
 
 ---
 
@@ -246,6 +254,33 @@ episode; state effects recorded as an apply-event list, retiring the
 winner-takes-all token ladder); automatic commit-derived checkpoints; and
 `REFUSED_LAUNCH` audit events. The owner-decision boundary is now explicit
 (§34). The mathematical core is untouched; deployment is forward-only.
+
+#### `CHG-41` — NOVELTY_REQUIRED: the second-order state (v0.10 Phase C)
+
+`CRRG/Novelty.lean` adds the §31 machine: `CycleState` counts completed
+stall→response cycles per obligation (a cycle's *condition* — response recorded
+while blocked — stays the deployment's, said so in the module header, which is
+what stops two definitions of "a cycle" existing), with the §36 spine proved at
+the default threshold of 3: two cycles not required, the third required, normal
+mode refused and novelty mode allowed there, admitted movement resetting both
+orders, per-key isolation. `CRRG.Stall` is byte-untouched. `crrg-episode`
+replays cycles (the replay reaches the increment only for a response recorded
+while blocked — reaching the line *is* the condition), `status` shows the mode
+(STALLED wins over NOVELTY_REQUIRED: a blocked obligation is answered by a
+response, not a mode), and `open --mode` enforces §31.4 through the existing
+`launch_refusal` path. The asymmetry is intended: the first order fires on
+multiples, the second is a threshold that only certified movement clears.
+132/132 self-tests (+2.8s — the price of driving the real replay, ratified);
+threshold configurability is a Phase F decision, deferred by design.
+
+#### `CHG-40` — the §30 persistence rendering (v0.10 Phase B)
+
+A `noTransition` terminal now prints the §30 block — machine-readable
+`guidance: CONTINUE_RESEARCH` plus the persistence text, byte-identical to the
+spec — and nothing else changes: exit 10 stands, other outcomes carry no block.
+The tool's header documents the §29.1 objective blocker taxonomy as the only
+legitimate stops, with the explicit note that this is documentation, not a check
+— enforcement lives in the programme and the gate.
 
 #### `CHG-39` — finalization: the evidence rename, the anchor limitation, the runtime profile
 
