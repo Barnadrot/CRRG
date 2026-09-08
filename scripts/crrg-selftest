@@ -441,6 +441,66 @@ expect reject "malformed; refusing to launch" \
   "refuses to launch against a malformed operator ban file" \
   "$SCRIPT_DIR/crrg-live-run" --config "$LR/badban.json" --model codex
 
+# --- §31.5: the generic mode signal ------------------------------------------
+#
+# A mode is one of CRRG's own scheduler states. WHICH adapter answers it is the
+# deployment's decision, read from the config -- so these fixtures map modes to
+# the same fake adapters, and CRRG still learns no vendor anything.
+python3 - "$LR/live.json" "$LR/live-modes.json" <<'PYMODES'
+import json, sys
+cfg = json.load(open(sys.argv[1]))
+cfg["modes"] = {"normal": "claude", "stalled": "codex", "novelty": "kimi"}
+json.dump(cfg, open(sys.argv[2], "w"), indent=2)
+PYMODES
+python3 - "$LR/live.json" "$LR/live-badmode.json" <<'PYBAD'
+import json, sys
+cfg = json.load(open(sys.argv[1]))
+cfg["modes"] = {"novelty": "nosuchmodel"}
+json.dump(cfg, open(sys.argv[2], "w"), indent=2)
+PYBAD
+
+expect ok "FAKE-kimi |--yolo| |$PROMPT_LINE|" \
+  "--mode selects the adapter the config maps that mode to (§31.5)" \
+  "$SCRIPT_DIR/crrg-live-run" --config "$LR/live-modes.json" --mode novelty
+
+# THE MODE SELECTS THE ADAPTER, NEVER THE CONTRACT. Two different modes, two
+# different adapters, one identical instruction -- a mode that could vary the
+# instruction would be varying the programme.
+expect ok "FAKE-codex |--full-auto| |$PROMPT_LINE|" \
+  "  ...a different mode, a different adapter, the same fixed instruction" \
+  "$SCRIPT_DIR/crrg-live-run" --config "$LR/live-modes.json" --mode stalled
+
+# `--print-argv` resolves and shows, without executing -- so the assertion is on
+# the RESOLVED argv (claude's flag, which only that adapter carries), and a
+# second case proves nothing ran. A fake adapter that had executed would have
+# printed its own FAKE- line instead.
+expect ok "--dangerously-skip-permissions" \
+  "  ...and --print-argv shows the resolved argv for the mapped adapter" \
+  "$SCRIPT_DIR/crrg-live-run" --config "$LR/live-modes.json" --mode normal --print-argv
+
+expect ok "nothing was launched" \
+  "  ...while launching nothing" \
+  "$SCRIPT_DIR/crrg-live-run" --config "$LR/live-modes.json" --mode normal --print-argv
+
+# CRRG does not guess which adapter answers a scheduler state.
+expect reject "maps no such mode" \
+  "a mode the config does not map fails loudly and execs nothing" \
+  "$SCRIPT_DIR/crrg-live-run" --config "$LR/live.json" --mode novelty
+
+expect reject "is not a key in 'models'" \
+  "a mode mapped to an adapter the config does not define fails loudly" \
+  "$SCRIPT_DIR/crrg-live-run" --config "$LR/live-badmode.json" --mode novelty
+
+# The pre-§31.5 path is untouched: a config with no `modes` table still
+# dispatches by --model exactly as it did.
+expect ok "FAKE-claude |--dangerously-skip-permissions| |$PROMPT_LINE|" \
+  "a config with no modes table still dispatches by --model, unchanged" \
+  "$SCRIPT_DIR/crrg-live-run" --config "$LR/live.json" --model claude
+
+expect reject "one of the arguments --model --mode is required" \
+  "a launch must still say what it is launching" \
+  "$SCRIPT_DIR/crrg-live-run" --config "$LR/live.json"
+
 echo ""
 echo "crrg-policy-check (operator exclusions, Spec §7):"
 

@@ -2,7 +2,8 @@
 """Generic live-launch dispatch (Spec §16.6.1).
 
 Usage:
-    crrg-live-run --config <downstream-config.json> --model codex|kimi|claude
+    crrg-live-run --config <cfg.json> --model codex|kimi|claude
+    crrg-live-run --config <cfg.json> --mode  normal|stalled|novelty
 
 CRRG owns the dispatch semantics. The **downstream integrator owns every
 application-specific detail**, including the exact executable and argument
@@ -23,6 +24,12 @@ Config (JSON):
         "codex":  ["executable", "...", "{PROMPT}"],
         "kimi":   ["executable", "...", "{PROMPT}"],
         "claude": ["executable", "...", "{PROMPT}"]
+      },
+
+      "modes": {                          <- optional (Spec §31.5)
+        "normal":  "claude",
+        "stalled": "codex",
+        "novelty": "kimi"
       }
     }
 
@@ -44,6 +51,25 @@ Rules, all enforced here:
   aborts the launch;
 * the model is exec'd from `repo_root`.
 
+THE MODE SIGNAL (Spec §31.5)
+----------------------------
+`--mode normal|stalled|novelty` selects an adapter through the config's optional
+`modes` table, which maps a mode name to a KEY IN `models` -- never to an argv,
+an executable or a flag. A deployment may answer a stalled or novelty-required
+obligation with a higher-effort reasoner, a different model family, or a swarm;
+which of those it is remains entirely the downstream's business.
+
+The three mode names are the only new vocabulary CRRG learns, and they are
+CRRG's own scheduler states, not anyone's product. Everything on the other side
+of the mapping comes from the caller's config, so the argument above is
+unchanged: there is still no vendor table here, and a deployment on a CLI CRRG
+has never heard of still works.
+
+**The mode selects the adapter, never the contract.** The substituted
+instruction is the same fixed sentence in every mode. A mode that could vary the
+instruction would be varying the programme, and the launcher would be back in
+the trust story §16.6.1 keeps it out of.
+
 **Model choice changes no mathematical CRRG state.** Nothing on this path
 touches a seal, a frontier, a root or a registry, and `--print-argv` exists so
 that can be inspected without running anything.
@@ -59,6 +85,10 @@ from pathlib import Path
 PROMPT_TOKEN = "{PROMPT}"
 REQUIRED = ("repo_root", "program", "preflight", "gate", "operator_bans", "models")
 REQUIRED_MODELS = ("codex", "kimi", "claude")
+
+# §31.5's generic scheduler signal. CRRG's own states -- what a deployment maps
+# them onto is the deployment's business, and is read from the config.
+MODES = ("normal", "stalled", "novelty")
 
 
 def fail(kind: str, msg: str) -> "NoReturn":  # type: ignore[name-defined]
@@ -120,7 +150,13 @@ def load_config(path: Path) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser(add_help=True, description="CRRG generic live launch")
     ap.add_argument("--config", required=True)
-    ap.add_argument("--model", required=True, choices=list(REQUIRED_MODELS))
+    # Exactly one of the two. `--model` names an adapter directly, as it always
+    # has; `--mode` names a scheduler state and lets the config say which adapter
+    # answers it (§31.5). Requiring the group preserves today's behaviour that a
+    # launch must state what it is launching.
+    picker = ap.add_mutually_exclusive_group(required=True)
+    picker.add_argument("--model", choices=list(REQUIRED_MODELS))
+    picker.add_argument("--mode", choices=list(MODES))
     ap.add_argument(
         "--print-argv",
         action="store_true",
@@ -153,15 +189,45 @@ def main() -> int:
         sys.stderr.write(proc.stderr)
         fail("policy", f"the operator ban file {bans} is malformed; refusing to launch")
 
+    # Resolve the mode to an adapter, if that is how this launch was asked for.
+    #
+    # Validated HERE rather than in load_config, so a config with no `modes`
+    # table -- or one whose table is irrelevant to this launch -- behaves exactly
+    # as it did before §31.5 existed. The mapping is only ever a promise about
+    # the launch being made.
+    model = args.model
+    if args.mode is not None:
+        modes = cfg.get("modes")
+        if not isinstance(modes, dict) or args.mode not in modes:
+            fail(
+                "mode",
+                f"--mode {args.mode} was requested but {cfg_path} maps no such mode. "
+                f"Add \"modes\": {{ \"{args.mode}\": \"<one of "
+                f"{', '.join(sorted(cfg['models']))}>\" }}. CRRG does not guess "
+                "which adapter answers a scheduler state (Spec §31.5); the "
+                "deployment says.",
+            )
+        model = modes[args.mode]
+        if not isinstance(model, str) or model not in cfg["models"]:
+            fail(
+                "mode",
+                f"modes.{args.mode} maps to {model!r}, which is not a key in "
+                f"'models' (have: {', '.join(sorted(cfg['models']))}). A mode maps "
+                "to an adapter this config defines, never to an executable or an "
+                "argv of its own.",
+            )
+
     prompt = f"Read {program} fully and start the experiment."
-    argv = [a.replace(PROMPT_TOKEN, prompt) for a in cfg["models"][args.model]]
+    argv = [a.replace(PROMPT_TOKEN, prompt) for a in cfg["models"][model]]
 
     print("=== CRRG live launch ===")
     print(f"config     {cfg_path}")
     print(f"repo_root  {repo_root}")
     print(f"programme  {program}")
     print(f"bans       {bans}")
-    print(f"model      {args.model}")
+    if args.mode is not None:
+        print(f"mode       {args.mode}  ->  {model}")
+    print(f"model      {model}")
     print(f"argv       {argv}")
     print("")
 
@@ -175,7 +241,7 @@ def main() -> int:
         fail("preflight", f"downstream preflight exited {pre.returncode}; not launching")
     print("preflight: OK")
     print("")
-    print(f"launching {args.model} from {repo_root}")
+    print(f"launching {model} from {repo_root}")
     sys.stdout.flush()
 
     os.chdir(repo_root)
