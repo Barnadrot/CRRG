@@ -256,6 +256,18 @@ winner-takes-all token ladder); automatic commit-derived checkpoints; and
 `REFUSED_LAUNCH` audit events. The owner-decision boundary is now explicit
 (§34). The mathematical core is untouched; deployment is forward-only.
 
+#### `CHG-43` — the generic launch-mode signal (v0.10 Phase E)
+
+`crrg-live-run` gains `--mode normal|stalled|novelty` (§31.5): the downstream
+config maps each mode to a model key from its own `models` table; an unmapped
+mode or a dangling key fails loudly before anything executes, with the message
+saying why CRRG does not guess. The instruction text is unchanged in every mode
+— the mode selects the adapter, never the contract — and a selftest proves two
+modes dispatching to two adapters carry the identical instruction line. The
+vendor audit is a selftest fact, not a promise: no executable line names a
+vendor. Auditor-verified on an independent fixture (mapped modes resolve, the
+unmapped mode fails loudly, a legacy no-modes config is byte-unchanged).
+
 #### `CHG-42` — episode events: APPLY, REFUSED_LAUNCH, derived checkpoints (v0.10 Phase D)
 
 §32/§33 land in `crrg-episode`. `APPLY` rows record the full effect list of an
