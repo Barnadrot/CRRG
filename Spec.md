@@ -92,12 +92,9 @@ main
 
 crrg-hardening
   = sole active implementation and validation branch
-
-claude/crrg-spec-implementation-fr72i8
-  = frozen bootstrap history; NO NEW WORK
 ```
 
-Do **not** merge the old Claude branch back into hardening. Preserve it only as provenance until External Review 2; then archive or delete it at owner discretion.
+The frozen bootstrap branch `claude/crrg-spec-implementation-fr72i8` was deleted by owner decision after External Review 2, as this policy always provided; its as-delivered commits remain referenced by SHA in `CHANGELOG.md` §0.
 
 Do not merge `crrg-hardening` into `main` before External Review 2 passes.
 
