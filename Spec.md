@@ -1,7 +1,7 @@
 # Certified Research Reduction Graph (CRRG)
 ## Kernel-checked research reduction and agent credit assignment
 
-**Status:** v0.10.0-draft — the persistence layer is specified (§28–§36), implementation pending; v0.9.0 is live on the Yukon lane (`crrg-yukon` @ `8fc55432`); External Review 2 complete.  
+**Status:** v0.10.0 — the persistence layer (§28–§36) is implemented, audited, and **live on the Yukon lane** (`proximity-research` `crrg-yukon` @ `a09874929`); External Review 2 complete.  
 **Authority:** this file is the sole normative CRRG design / execution document. `CHANGELOG.md` records history and implementation findings; it does not choose targets or override this spec. Downstream notes are evidence only.  
 **Repository architecture:** CRRG is a standalone general-purpose Lean repository consumed as a pinned dependency by research projects.  
 **First integration / research test:** `Barnadrot/proximity-research`, using controlled Yukon lower-bound history before any CRRG-directed live Soundness work.  
