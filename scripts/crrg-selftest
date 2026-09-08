@@ -875,6 +875,125 @@ expect ok "mode: STALLED" \
   "$EP" status "$BOTH" OBL-C2
 
 
+# --- §32/§33: apply events, refusal traces, derived checkpoints --------------
+#
+# A GIT FIXTURE, because checkpoint derivation reads real branch history and a
+# hand-written log would test the fixture instead of the derivation.
+EPGIT="$TMPDIR_SELFTEST/epgit"
+mkdir -p "$EPGIT"
+( cd "$EPGIT" && git init -q . && git config user.email t@t && git config user.name t \
+    && echo base > a.txt && git add -A && git commit -qm "base commit" ) >/dev/null 2>&1
+epg() { CRRG_WORKDIR="$EPGIT" "$EP" "$@"; }
+epg_code() { CRRG_WORKDIR="$EPGIT" "$EP" "$@" >/dev/null 2>&1; echo "exit=$?"; }
+
+APL="$EPD/apply.tsv"
+printf '# CRRG episode log\n' > "$APL"
+epg open "$APL" a1 OBL-AP mech-ap gen-1 >/dev/null 2>&1
+( cd "$EPGIT" && echo one > b.txt && git add -A && git commit -qm "first research commit" \
+    && echo two > c.txt && git add -A && git commit -qm "second research commit" ) >/dev/null 2>&1
+
+# §33.1: the branch's own history becomes the episode's checkpoints, without the
+# researcher being asked. Voluntary checkpointing produced zero rows in three
+# days of live operation; this is why the record is derived.
+expect ok "first research commit" \
+  "terminal derives the episode's checkpoints from branch history (§33.1)" \
+  epg terminal "$APL" a1 admitted
+apl_order() { awk -F'\t' '$2 == "a1" { printf "%s ", $1 }' "$APL"; echo; }
+expect ok "OPEN CHECKPOINT CHECKPOINT TERMINAL" \
+  "  ...appended BEFORE the terminal, so the episode reads in the order it happened" \
+  apl_order
+
+# §32: the adjudication-level token. `admitted` says a transition was admitted
+# and nothing about which effects were committed -- that is the APPLY rows' job.
+expect ok "exit=0" \
+  "the bare admitted terminal token is accepted and exits 0 (§32, D.2)" \
+  epg_code validate "$APL"
+
+apl_status() { epg status "$APL" OBL-AP | grep -E "no-transition-count|cycles"; }
+APL_BEFORE="$(apl_status)"
+expect ok "recorded: APPLY refined" \
+  "apply records a certified effect on an admitted episode" \
+  epg apply "$APL" a1 refined
+expect ok "recorded: APPLY closed" \
+  "  ...and a second effect on the same episode (§32: the full effect list)" \
+  epg apply "$APL" a1 closed
+
+# §32: "the stall detector and the second-order counter read the adjudication
+# axis only. Apply events never increment either." Proved, not assumed.
+apl_unmoved() {
+  if [ "$APL_BEFORE" = "$(apl_status)" ]; then echo "counters unmoved by APPLY"
+  else echo "APPLY MOVED A COUNTER"; fi
+}
+expect ok "counters unmoved by APPLY" \
+  "  ...and two apply events move no stall or cycle counter" apl_unmoved
+
+# An apply event on an episode whose adjudication refused movement would claim
+# state the gate never admitted.
+epg open "$APL" a2 OBL-AP2 mech-ap gen-2 >/dev/null 2>&1
+epg terminal "$APL" a2 noTransition >/dev/null 2>&1
+expect reject "did not admit a certified transition" \
+  "apply is refused on a noTransition episode (§32)" \
+  epg apply "$APL" a2 refined
+
+epg open "$APL" a3 OBL-AP3 mech-ap gen-3 >/dev/null 2>&1
+expect reject "is still open" \
+  "apply is refused on an episode that has not been adjudicated yet" \
+  epg apply "$APL" a3 refined
+
+# Dedup by commit. A second `terminal` on the same episode is impossible -- a
+# closed episode refuses one -- so the idempotence that IS reachable is this:
+# a commit already recorded as a checkpoint is never derived a second time.
+DED="$EPD/dedup.tsv"
+printf '# CRRG episode log\n' > "$DED"
+epg open "$DED" d1 OBL-D mech-d gen-1 >/dev/null 2>&1
+( cd "$EPGIT" && echo three > d.txt && git add -A && git commit -qm "third commit" ) >/dev/null 2>&1
+DED_SHA="$( cd "$EPGIT" && git rev-parse HEAD )"
+epg checkpoint "$DED" d1 "$DED_SHA" "recorded by hand" >/dev/null 2>&1
+epg terminal "$DED" d1 admitted >/dev/null 2>&1
+ded_count() { awk -F'\t' '$1 == "CHECKPOINT" && $2 == "d1"' "$DED" | wc -l; }
+expect ok "1" \
+  "a commit already checkpointed is not derived again (dedup by commit)" ded_count
+
+# §33.1: derivation failure is exit 30 with nothing appended, never a silent
+# skip -- a deployment that wants git to be authoritative declares that.
+BADG="$EPD/badcommit.tsv"
+printf '# CRRG episode log\n' > "$BADG"
+printf 'OPEN\tz1\tOBL-Z\tmech-z\tgen\tdeadbeefdeadbeef\t2026-01-01T00:00:00Z\t-\n' >> "$BADG"
+BADG_BEFORE="$(sha256sum "$BADG" | cut -d' ' -f1)"
+expect ok "exit=30" \
+  "an unreachable opening commit fails derivation loudly (§33.1)" \
+  epg_code terminal "$BADG" z1 admitted
+badg_untouched() {
+  if [ "$BADG_BEFORE" = "$(sha256sum "$BADG" | cut -d' ' -f1)" ]; then
+    echo "log byte-identical"; else echo "LOG MUTATED"; fi
+}
+expect ok "log byte-identical" \
+  "  ...and appends nothing" badg_untouched
+
+# §33.2: enforcement that fires must be distinguishable from enforcement that
+# never fires. THE REFUSAL IS THE RECORD -- the one path in this script that
+# deliberately writes on a failure.
+REF="$EPD/refused.tsv"
+printf '# CRRG episode log\n' > "$REF"
+for i in 1 2 3 4 5; do
+  epg open "$REF" "rr$i" OBL-RF mech-rf gen >/dev/null 2>&1
+  epg terminal "$REF" "rr$i" noTransition >/dev/null 2>&1
+done
+expect reject "stalled: response required" \
+  "a refused open still reports why it refused" \
+  epg open "$REF" rx OBL-RF mech-rf gen
+ref_row() { awk -F'\t' '$1 == "REFUSED_LAUNCH" { print "class=" $5 " episode=" $2 }' "$REF"; }
+expect ok "class=blocked episode=-" \
+  "  ...and leaves a REFUSED_LAUNCH trace with the reason class (§33.2)" ref_row
+expect ok "exit=20" \
+  "  ...and still exits 20" \
+  epg_code open "$REF" rx2 OBL-RF mech-rf gen
+expect ok "no-transition-count: 5" \
+  "  ...and the trace increments nothing" \
+  epg status "$REF" OBL-RF
+expect ok "episode log OK" \
+  "  ...and validate accepts the row" epg validate "$REF"
+
 echo ""
 echo "crrg-mechanism (mechanism records, Spec §24):"
 

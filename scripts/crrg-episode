@@ -7,6 +7,7 @@ Usage:
                                             [--mode normal|novelty]
     crrg-episode [--threshold N] checkpoint <log> <episode_id> <ref> [note]
     crrg-episode [--threshold N] terminal   <log> <episode_id> <outcome> [note]
+    crrg-episode [--threshold N] apply      <log> <episode_id> <effect> [note]
     crrg-episode [--threshold N] respond    <log> <obligation_id> <response> [note]
     crrg-episode [--threshold N] status     <log> [obligation_id]
     crrg-episode [--threshold N] may-launch <log> <obligation_id> <mechanism_id>
@@ -106,9 +107,15 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-KINDS = ("OPEN", "CHECKPOINT", "TERMINAL", "RESPONSE")
+KINDS = ("OPEN", "CHECKPOINT", "TERMINAL", "RESPONSE", "APPLY", "REFUSED_LAUNCH")
 
 OUTCOMES = (
+    # §32/D.2: the adjudication-level token. `admitted` says the adjudication
+    # admitted a certified transition, and nothing about which effects were
+    # committed -- that is what APPLY rows carry. The `admitted-<kind>` tokens
+    # below stay VALID for historical rows (§35 is forward-only); replay treats
+    # every one of them as admitted.
+    "admitted",
     "admitted-closed",
     "admitted-refined",
     "admitted-split",
@@ -120,6 +127,22 @@ OUTCOMES = (
     "rejected",
     "toolingFailure",
 )
+
+# §32: the certified effects an APPLY row may record -- §19.1's kinds, at the
+# effect level rather than the adjudication level.
+EFFECTS = (
+    "closed",
+    "refined",
+    "split",
+    "refuted",
+    "retired",
+    "superseded",
+    "quantitative",
+)
+
+# §33.2: why a launch was refused. The class, not the prose -- the message is for
+# a human, this is for an auditor asking which enforcement fired.
+REFUSAL_CLASSES = ("blocked", "armed-same-mechanism", "novelty-required")
 
 RESPONSES = (
     "reselect",
@@ -207,6 +230,17 @@ def read_rows(path: Path):
     return rows
 
 
+def is_admitted(outcome: str) -> bool:
+    """Did this terminal admit a certified transition?
+
+    One predicate for both spellings: D.2's adjudication-level `admitted` and the
+    legacy `admitted-<kind>` tokens, which stay valid for historical rows under
+    §35's forward-only rule. Everything that asks "was this admitted?" asks here,
+    so the two spellings cannot drift apart.
+    """
+    return outcome == "admitted" or outcome.startswith("admitted-")
+
+
 def is_multiple(count: int, threshold: int) -> bool:
     """Mirrors Lean `Nat` semantics, where `n % 0 = n`, so a threshold of 0
     never blocks for the count >= 1 reachable here."""
@@ -266,6 +300,12 @@ def replay(rows, threshold: int):
                 "obligation": r.obligation_id,
                 "mechanism": r.mechanism_id,
                 "closed": False,
+                # Set when the episode closes; APPLY rows are legal only after an
+                # admitted one (§32).
+                "admitted": False,
+                # The state this episode opened from -- the lower bound of the
+                # commit range checkpoint derivation walks (§33.1).
+                "commit": r.commit,
             }
             st["open_episode"] = r.episode_id
             # A launch happened: an armed same-mechanism rejection is spent.
@@ -303,8 +343,63 @@ def replay(rows, threshold: int):
                         "expected one of " + " | ".join(OUTCOMES)
                     )
                 ep["closed"] = True
+                ep["admitted"] = is_admitted(r.payload)
                 st["open_episode"] = None
                 apply_terminal(st, r.payload, ep["mechanism"], threshold)
+
+        elif r.kind == "APPLY":
+            # §32: bookkeeping for effects committed AFTER an admitted
+            # adjudication. It never opens an episode, and the counters below
+            # never see it -- the stall detector and the cycle counter read the
+            # adjudication axis only, so an apply event must not be able to move
+            # either. That is why this branch touches no obligation state at all.
+            ep = episodes.get(r.episode_id)
+            if ep is None:
+                raise Violation(
+                    f"line {r.lineno}: no OPEN row for episode {r.episode_id!r}"
+                )
+            if r.payload not in EFFECTS:
+                raise Malformed(
+                    f"line {r.lineno}: unknown effect {r.payload!r}; expected one of "
+                    + " | ".join(EFFECTS)
+                )
+            if r.obligation_id != ep["obligation"]:
+                raise Violation(
+                    f"line {r.lineno}: obligation mismatch for episode "
+                    f"{r.episode_id!r}: row says {r.obligation_id!r}, its OPEN says "
+                    f"{ep['obligation']!r}"
+                )
+            if not ep["closed"]:
+                raise Violation(
+                    f"line {r.lineno}: episode {r.episode_id!r} is still open. An "
+                    "apply event records effects committed after an adjudication, "
+                    "so it follows the terminal row rather than preceding it (§32)."
+                )
+            if not ep["admitted"]:
+                raise Violation(
+                    f"line {r.lineno}: episode {r.episode_id!r} did not admit a "
+                    "certified transition, so there is no certified effect to "
+                    "record. An apply event on a noTransition, rejected or "
+                    "toolingFailure episode would claim state movement the "
+                    "adjudication refused (§32)."
+                )
+
+        elif r.kind == "REFUSED_LAUNCH":
+            # §33.2: enforcement that fires must be distinguishable from
+            # enforcement that never fires. The row is the audit trace and
+            # nothing else -- it opens no episode, produces no outcome, and
+            # increments no counter, so it is validated for shape and then
+            # deliberately ignored.
+            if r.episode_id != "-":
+                raise Malformed(
+                    f"line {r.lineno}: a REFUSED_LAUNCH row carries episode_id '-'; "
+                    "a refused launch opened no episode"
+                )
+            if r.payload not in REFUSAL_CLASSES:
+                raise Malformed(
+                    f"line {r.lineno}: unknown refusal class {r.payload!r}; expected "
+                    "one of " + " | ".join(REFUSAL_CLASSES)
+                )
 
         elif r.kind == "RESPONSE":
             if r.episode_id != "-" or r.mechanism_id != "-":
@@ -332,7 +427,7 @@ def replay(rows, threshold: int):
 
 def apply_terminal(st, outcome: str, mechanism: str, threshold: int) -> None:
     """The Stall.lean transition, per obligation."""
-    if outcome.startswith("admitted-"):
+    if is_admitted(outcome):
         # Certified movement materially changed the obligation: the history of
         # no-transitions is spent, and so is any armed rejection.
         st["count"] = 0
@@ -418,16 +513,21 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def append_row(path: Path, fields, before: str) -> None:
-    """Build the new file beside the real one, verify it, then rename over it.
+def append_rows(path: Path, rows_out, before: str) -> None:
+    """Append one or more rows: build beside the real file, verify, rename over.
 
-    A half-written log is never observable, and existing rows are compared
-    rather than trusted -- that catches an editor, a locale, or a stray CR that
-    a blind append would not.
+    Plural because `terminal` appends the episode's derived checkpoints and its
+    terminal row in ONE invocation (§33.1). They go in a single atomic replace so
+    a failure part-way through cannot leave an episode with checkpoints and no
+    terminal -- the log would then say the episode is still open.
+
+    A half-written log is never observable, and existing rows are compared rather
+    than trusted -- that catches an editor, a locale, or a stray CR that a blind
+    append would not.
     """
     original = path.read_text()
     prefix = original if (not original or original.endswith("\n")) else original + "\n"
-    new_text = prefix + "\t".join(fields) + "\n"
+    new_text = prefix + "".join("\t".join(f) + "\n" for f in rows_out)
 
     tmp = path.with_name(f"{path.name}.new.{os.getpid()}")
     try:
@@ -515,7 +615,12 @@ def cmd_status(args, _rows, obligations) -> int:
 
 def launch_refusal(st, obligation_id: str, mechanism_id: str, threshold: int,
                    novelty_mode: bool = False):
-    """The §22 and §31.4 launch guard. Returns a reason string, or None to permit.
+    """The §22 and §31.4 launch guard.
+
+    Returns `(reason_class, message)` or None to permit. The CLASS is what a
+    `REFUSED_LAUNCH` row records (§33.2) and the message is what a human reads;
+    they come from one place so a refusal cannot be logged under one reason and
+    explained by another.
 
     ONE implementation, shared by `may-launch` (which reports it) and `open`
     (which enforces it). A guard that answers one way when asked and another way
@@ -527,23 +632,23 @@ def launch_refusal(st, obligation_id: str, mechanism_id: str, threshold: int,
     gets the answer for a normal-mode launch.
     """
     if st["blocked"]:
-        return (
+        return ("blocked", (
             f"stalled: response required for obligation {obligation_id!r} "
             f"(no-transition count {st['count']}, threshold {threshold}). "
             "Record one of: " + " | ".join(RESPONSES)
-        )
+        ))
     if st["armed"] is not None and st["armed"] == mechanism_id:
-        return (
+        return ("armed-same-mechanism", (
             f"same mechanism immediately after stall: {mechanism_id!r} is the "
             f"mechanism that stalled obligation {obligation_id!r}. Continue under a "
             "different recorded mechanism, or record an ownerOverride (§22)."
-        )
+        ))
     # §31.4, checked after the first-order refusals on purpose: while an
     # obligation is blocked the required action is a response, and naming the
     # mode instead would send the researcher to the wrong one. Mirrors
     # CRRG.Novelty.CycleState.modeAllowed.
     if novelty_required(st) and not novelty_mode:
-        return (
+        return ("novelty-required", (
             f"NOVELTY_REQUIRED: obligation {obligation_id!r} has completed "
             f"{st['cycles']} stall cycles since its last admitted transition "
             f"(threshold {DEFAULT_CYCLE_THRESHOLD}), so repeated attempts under "
@@ -552,15 +657,17 @@ def launch_refusal(st, obligation_id: str, mechanism_id: str, threshold: int,
             "of attacking the exact obligation (§31.3). This is not an "
             "escalation and not a stop: it changes the mode of research, not "
             "its continuation (§31.2)."
-        )
+        ))
     return None
 
 
 def cmd_may_launch(args, _rows, obligations) -> int:
     st = obligations.get(args.obligation_id) or new_obligation_state()
-    reason = launch_refusal(st, args.obligation_id, args.mechanism_id, args.threshold)
-    if reason is not None:
-        print(f"MAY-LAUNCH REJECTED: {reason}", file=sys.stderr)
+    refusal = launch_refusal(st, args.obligation_id, args.mechanism_id, args.threshold)
+    if refusal is not None:
+        # A pure query: it reports the guard's answer and writes nothing. Only
+        # `open`, which actually attempts a launch, leaves a REFUSED_LAUNCH trace.
+        print(f"MAY-LAUNCH REJECTED: {refusal[1]}", file=sys.stderr)
         return EXIT_REJECT
     print(f"may-launch: allowed  obligation {args.obligation_id}  mechanism {args.mechanism_id}")
     return EXIT_OK
@@ -582,10 +689,30 @@ def cmd_open(args, _rows, obligations, before: str):
     # command-line argument that leaves no trace.
     st = obligations.get(args.obligation_id) or new_obligation_state()
     novelty = args.mode == "novelty"
-    reason = launch_refusal(st, args.obligation_id, args.mechanism_id, args.threshold,
-                            novelty_mode=novelty)
-    if reason is not None:
-        print(f"EPISODE OPEN REJECTED: {reason}", file=sys.stderr)
+    refusal = launch_refusal(st, args.obligation_id, args.mechanism_id, args.threshold,
+                             novelty_mode=novelty)
+    if refusal is not None:
+        reason_class, message = refusal
+        # §33.2: THE REFUSAL IS THE RECORD. Every other failing path in this
+        # script leaves the log byte-identical; this one deliberately does not,
+        # because enforcement that fires has to be distinguishable from
+        # enforcement that never fires, and a refusal that leaves no trace is
+        # indistinguishable from a launch that never happened.
+        #
+        # The row opens nothing and counts nothing -- the replay validates its
+        # shape and then ignores it.
+        row = ["REFUSED_LAUNCH", "-", args.obligation_id, args.mechanism_id,
+               reason_class, head_commit(), now_utc(), clean_note(args.note)]
+        try:
+            append_rows(Path(args.log), [row], before)
+        except Malformed as e:
+            print(f"EPISODE LOG MALFORMED: {e}", file=sys.stderr)
+            sys.exit(EXIT_MALFORMED)
+        print("appended:")
+        print("  " + "\t".join(row))
+        print(f"recorded: REFUSED_LAUNCH {reason_class} on obligation "
+              f"{args.obligation_id}")
+        print(f"EPISODE OPEN REJECTED: {message}", file=sys.stderr)
         sys.exit(EXIT_REJECT)
 
     # Audit evidence that this episode was opened in novelty mode, recorded in
@@ -618,6 +745,74 @@ def cmd_checkpoint(args, rows, _obligations, before: str):
             args.ref, head_commit(), now_utc(), clean_note(args.note)]
 
 
+def derive_checkpoints(rows, ep, episode_id: str):
+    """§33.1: the branch's own history since the episode opened, as CHECKPOINT rows.
+
+    Voluntary checkpointing failed in live operation -- three days, zero rows,
+    while the research evidence landed as ordinary git commits. So the record is
+    derived rather than asked for: every commit in `(open_commit, HEAD]` that is
+    not already a CHECKPOINT row for this episode becomes one.
+
+    Dedup is by commit SHA, which is what makes a re-run idempotent: closing the
+    same episode twice cannot double-record its history.
+
+    Derivation failure -- no git, an unreachable open commit -- is exit 30 with
+    nothing appended. It is NOT silently skipped: a deployment that wants git to
+    be the authoritative checkpoint history declares that as a programme
+    decision (§33.1), and a runtime fallback would make the two cases
+    indistinguishable.
+    """
+    workdir = os.environ.get("CRRG_WORKDIR") or str(Path(__file__).resolve().parent.parent)
+    open_commit = ep["commit"]
+    if not open_commit or open_commit == "-":
+        raise Malformed(
+            f"episode {episode_id!r} records no opening commit, so its checkpoint "
+            "range has no lower bound (§33.1). Nothing was appended."
+        )
+
+    already = {r.payload for r in rows
+               if r.kind == "CHECKPOINT" and r.episode_id == episode_id}
+
+    try:
+        proc = subprocess.run(
+            ["git", "-C", workdir, "log", "--format=%H%x09%s",
+             f"{open_commit}..HEAD"],
+            capture_output=True, text=True, check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        detail = getattr(e, "stderr", "") or str(e)
+        raise Malformed(
+            f"could not derive checkpoints for episode {episode_id!r} from "
+            f"{open_commit}..HEAD in {workdir}: {detail.strip()}. Nothing was "
+            "appended. §33.1 makes this a failure rather than a skip: a "
+            "deployment that wants git to be the authoritative checkpoint history "
+            "declares that, it does not fall back into it."
+        ) from None
+
+    out = []
+    # git log is newest-first; the log should read in the order the work happened.
+    for line in reversed(proc.stdout.splitlines()):
+        if not line.strip():
+            continue
+        sha, _, subject = line.partition("\t")
+        if sha in already:
+            continue
+        out.append(["CHECKPOINT", episode_id, ep["obligation"], ep["mechanism"],
+                    sha, head_commit(), now_utc(), clean_note(subject)])
+    return out
+
+
+def cmd_apply(args, rows, _obligations, before: str):
+    check_id("episode_id", args.episode_id)
+    if args.effect not in EFFECTS:
+        raise Malformed(
+            f"unknown effect {args.effect!r}; expected one of " + " | ".join(EFFECTS)
+        )
+    ep = episode_row(rows, args.episode_id)
+    return [["APPLY", args.episode_id, ep.obligation_id, ep.mechanism_id,
+             args.effect, head_commit(), now_utc(), clean_note(args.note)]]
+
+
 def cmd_terminal(args, rows, _obligations, before: str):
     check_id("episode_id", args.episode_id)
     if args.outcome not in OUTCOMES:
@@ -626,8 +821,18 @@ def cmd_terminal(args, rows, _obligations, before: str):
             + " | ".join(OUTCOMES)
         )
     ep = episode_row(rows, args.episode_id)
-    return ["TERMINAL", args.episode_id, ep.obligation_id, ep.mechanism_id,
-            args.outcome, head_commit(), now_utc(), clean_note(args.note)]
+    # §33.1: the episode's derived history goes in FIRST, so the log reads
+    # open -> checkpoints -> terminal rather than recording the close before the
+    # work it closes over.
+    derived = derive_checkpoints(
+        rows,
+        {"commit": ep.commit, "obligation": ep.obligation_id,
+         "mechanism": ep.mechanism_id},
+        args.episode_id,
+    )
+    return derived + [["TERMINAL", args.episode_id, ep.obligation_id,
+                       ep.mechanism_id, args.outcome, head_commit(), now_utc(),
+                       clean_note(args.note)]]
 
 
 def cmd_respond(args, _rows, obligations, before: str):
@@ -651,6 +856,7 @@ def cmd_respond(args, _rows, obligations, before: str):
 
 
 APPENDERS = {
+    "apply": cmd_apply,
     "open": cmd_open,
     "checkpoint": cmd_checkpoint,
     "terminal": cmd_terminal,
@@ -690,6 +896,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("log")
     p.add_argument("episode_id")
     p.add_argument("ref")
+    p.add_argument("note", nargs="?", default="-")
+
+    p = sub.add_parser("apply")
+    p.add_argument("log")
+    p.add_argument("episode_id")
+    p.add_argument("effect", choices=EFFECTS)
     p.add_argument("note", nargs="?", default="-")
 
     p = sub.add_parser("terminal")
@@ -735,13 +947,20 @@ def main() -> int:
         if args.command in READERS:
             return READERS[args.command](args, rows, obligations)
 
-        fields = APPENDERS[args.command](args, rows, obligations, before)
+        new_rows = APPENDERS[args.command](args, rows, obligations, before)
+        # Every appender returns a LIST: `terminal` contributes the episode's
+        # derived checkpoints ahead of its terminal row (§33.1), the rest one row.
+        if new_rows and isinstance(new_rows[0], str):
+            new_rows = [new_rows]
 
-        # The log with the new row must satisfy the same rules the old one did.
-        candidate = rows + [Row(len(rows) + 1, fields)]
+        # The log with the new rows must satisfy the same rules the old one did --
+        # all of them together, since a derived checkpoint and the terminal that
+        # follows it are only legal as a pair.
+        candidate = rows + [Row(len(rows) + i + 1, f) for i, f in enumerate(new_rows)]
         replay(candidate, args.threshold)
 
-        append_row(path, fields, before)
+        append_rows(path, new_rows, before)
+        fields = new_rows[-1]
 
     except Violation as e:
         print(f"EPISODE LOG REJECTED: {e}", file=sys.stderr)
@@ -751,7 +970,11 @@ def main() -> int:
         return untouched_or_worse(path, before, EXIT_MALFORMED)
 
     print("appended:")
-    print("  " + "\t".join(fields))
+    for f in new_rows:
+        print("  " + "\t".join(f))
+    for f in new_rows[:-1]:
+        if f[0] == "CHECKPOINT":
+            print(f"recorded: CHECKPOINT {f[4]} on obligation {f[2]} (derived)")
     print(f"recorded: {fields[0]} {fields[4]} on obligation {fields[2]}")
 
     if args.command == "terminal":
