@@ -1,0 +1,8 @@
+{
+  "submission": "Submission.lean",
+  "imports": [
+    "CRRGExamples.Negatives"
+  ],
+  "state": "CRRGExamples.E1 8",
+  "move": "Sub.move"
+}

@@ -1,0 +1,7 @@
+{
+  "origin": "lint: the runner's own tools (and Lean) are not importable",
+  "verdict": "reject",
+  "reasons": [
+    "META_IMPORT"
+  ]
+}

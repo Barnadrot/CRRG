@@ -1,0 +1,6 @@
+{
+  "origin": "record-low rule: after growing [0,4] to [0,19], shrinking back (reusing key 1, as D1 requires) is a local decrease but not below the record",
+  "verdict": "accept",
+  "reasons": [],
+  "tag": "notCertifiedEasier"
+}

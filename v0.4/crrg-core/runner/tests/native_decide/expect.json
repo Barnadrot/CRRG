@@ -1,0 +1,7 @@
+{
+  "origin": "a closure through native_decide (trusts the compiler, not the kernel)",
+  "verdict": "reject",
+  "reasons": [
+    "AXIOM"
+  ]
+}

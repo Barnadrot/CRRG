@@ -1,0 +1,7 @@
+{
+  "origin": "example 5: a refuted obligation re-admitted by its key",
+  "verdict": "reject",
+  "reasons": [
+    "COMMIT_REJECT:learnedConflict"
+  ]
+}

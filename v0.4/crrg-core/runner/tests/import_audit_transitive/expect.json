@@ -1,0 +1,7 @@
+{
+  "origin": "lint: an allowed module that transitively imports CRRGTools",
+  "verdict": "reject",
+  "reasons": [
+    "META_IMPORT"
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "origin": "example 1: P = A ∧ B split into {A, B}",
+  "verdict": "accept",
+  "reasons": [],
+  "tag": "notCertifiedEasier"
+}

@@ -1,0 +1,7 @@
+{
+  "origin": "synthetic family: a data obligation (the certificate for m) claimed without an evidence reference",
+  "verdict": "reject",
+  "reasons": [
+    "GUARD_FIELD_MISSING"
+  ]
+}

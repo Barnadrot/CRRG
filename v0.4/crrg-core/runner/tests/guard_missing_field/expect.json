@@ -1,0 +1,7 @@
+{
+  "origin": "synthetic family: the contract omits the window field",
+  "verdict": "reject",
+  "reasons": [
+    "GUARD_FIELD_MISSING"
+  ]
+}

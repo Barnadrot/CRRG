@@ -1,0 +1,7 @@
+{
+  "origin": "synthetic family: the step k = 5 does not divide m + 1 = 12 (the range field still holds)",
+  "verdict": "reject",
+  "reasons": [
+    "GUARD_FIELD_FAILS"
+  ]
+}

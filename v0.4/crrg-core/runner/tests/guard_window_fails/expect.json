@@ -1,0 +1,7 @@
+{
+  "origin": "synthetic family: the contract's value x = 12 lies below its window [20, 30]",
+  "verdict": "reject",
+  "reasons": [
+    "GUARD_FIELD_FAILS"
+  ]
+}

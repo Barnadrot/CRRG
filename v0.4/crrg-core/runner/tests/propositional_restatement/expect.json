@@ -1,0 +1,7 @@
+{
+  "origin": "review item 8 (known limit): a propositional restatement of a refuted claim passes D1; it is caught only after a detector supplies the implication to State.learn (Negatives 4b)",
+  "verdict": "accept",
+  "reasons": [],
+  "tag": "notCertifiedEasier",
+  "note": "documented limit, not a runner guarantee: see RUNNER.md"
+}

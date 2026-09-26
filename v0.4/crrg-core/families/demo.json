@@ -1,0 +1,31 @@
+{
+  "id": "demo-family",
+  "name": "demo",
+  "crux": "synthetic example: one shared guarded edge consumed by three toy routes",
+  "status": "example",
+  "shared_edges": {
+    "toy-edge": {
+      "arrow": "toy-edge",
+      "statement": "synthetic stand-in lemma: under the guard, the consumer's bill holds",
+      "kind": "bill",
+      "lean_model": "CRRGExamples.CruxFamily.guard",
+      "guard": [
+        {"id": "mode_1", "kind": "decidable", "check": {"var": "mode", "op": "==", "value": 1}},
+        {"id": "m_odd", "kind": "decidable", "check": {"var": "m", "op": "odd"}},
+        {"id": "m_certified", "kind": "data", "note": "an external certificate for m, cited by an evidence reference"},
+        {"id": "k_divides", "kind": "decidable", "check": {"op": "divides", "var": "k", "of": "m+1"}},
+        {"id": "k_range", "kind": "decidable", "check": {"all": [
+            {"var": "k", "op": "<", "var2": "m"},
+            {"var": "m", "op": "<=", "expr": "4*k"}]}},
+        {"id": "x_window", "kind": "decidable", "check": {"all": [
+            {"var": "x", "op": ">=", "var2": "lo"},
+            {"var": "x", "op": "<=", "var2": "hi"}]}},
+        {"id": "profile", "kind": "joint",
+         "note": "ONE witness with minDeg >= 2 AND mass <= 40",
+         "check": {"all": [
+            {"var": "minDeg", "op": ">=", "value": 2},
+            {"var": "mass", "op": "<=", "value": 40}]}}
+      ]
+    }
+  }
+}

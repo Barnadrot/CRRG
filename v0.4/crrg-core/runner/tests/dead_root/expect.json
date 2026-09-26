@@ -1,0 +1,7 @@
+{
+  "origin": "review item 6: a move on a route whose root is refuted",
+  "verdict": "reject",
+  "reasons": [
+    "COMMIT_REJECT:rootRefuted"
+  ]
+}

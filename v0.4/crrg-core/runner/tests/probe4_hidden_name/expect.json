@@ -1,0 +1,13 @@
+{
+  "origin": "Probe4: the forgery under a private-looking name",
+  "verdict": "reject",
+  "reasons": [
+    "META_COMMAND",
+    "META_IMPORT"
+  ],
+  "reasons_if_lint_bypassed": [
+    "LINEAGE",
+    "META_COMMAND",
+    "META_IMPORT"
+  ]
+}

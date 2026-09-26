@@ -1,0 +1,7 @@
+{
+  "origin": "lint: options that bypass the kernel are refused",
+  "verdict": "reject",
+  "reasons": [
+    "FORBIDDEN_OPTION"
+  ]
+}

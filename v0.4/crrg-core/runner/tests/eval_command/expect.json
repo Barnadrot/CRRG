@@ -1,0 +1,7 @@
+{
+  "origin": "meta-free lint: #eval can run CommandElabM code",
+  "verdict": "reject",
+  "reasons": [
+    "META_COMMAND"
+  ]
+}

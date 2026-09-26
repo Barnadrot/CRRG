@@ -1,0 +1,6 @@
+{
+  "origin": "lint false-positive control: meta words inside comments and strings are not commands",
+  "verdict": "accept",
+  "reasons": [],
+  "tag": "certifiedEasier"
+}
