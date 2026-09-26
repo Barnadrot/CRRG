@@ -1,0 +1,7 @@
+{
+  "origin": "a closure proved by sorry",
+  "verdict": "reject",
+  "reasons": [
+    "AXIOM"
+  ]
+}

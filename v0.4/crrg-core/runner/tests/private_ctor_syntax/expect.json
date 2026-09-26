@@ -1,0 +1,7 @@
+{
+  "origin": "G1 without meta: the private constructor is refused by the elaborator",
+  "verdict": "reject",
+  "reasons": [
+    "COMPILE_ERROR"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "origin": "synthetic family: a consumer in mode 2 claims the edge",
+  "verdict": "reject",
+  "reasons": [
+    "GUARD_FIELD_FAILS"
+  ]
+}

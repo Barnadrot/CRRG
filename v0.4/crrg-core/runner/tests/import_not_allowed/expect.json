@@ -1,0 +1,7 @@
+{
+  "origin": "lint: a module outside the allow-list",
+  "verdict": "reject",
+  "reasons": [
+    "IMPORT_NOT_ALLOWED"
+  ]
+}

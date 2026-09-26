@@ -1,0 +1,7 @@
+{
+  "origin": "synthetic family: the contract names an edge the family does not register",
+  "verdict": "reject",
+  "reasons": [
+    "GUARD_UNKNOWN_EDGE"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "origin": "synthetic family: the joint profile field typed as two separate existentials (one witness with the degree, another with the mass)",
+  "verdict": "reject",
+  "reasons": [
+    "GUARD_JOINT_SPLIT"
+  ]
+}

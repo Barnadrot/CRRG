@@ -1,0 +1,7 @@
+{
+  "origin": "synthetic family: a profile with mass 41, one past the budget",
+  "verdict": "reject",
+  "reasons": [
+    "GUARD_FIELD_FAILS"
+  ]
+}

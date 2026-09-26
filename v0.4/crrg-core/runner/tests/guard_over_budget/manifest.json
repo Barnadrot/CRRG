@@ -1,0 +1,36 @@
+{
+  "submission": "Submission.lean",
+  "imports": [
+    "CRRGExamples.Negatives"
+  ],
+  "state": "CRRGExamples.E1 8",
+  "move": "Sub.move",
+  "guard_claim": {
+    "family": "demo",
+    "arrow": "toy-edge",
+    "instance": {
+      "mode": 1,
+      "m": 11,
+      "k": 4,
+      "lo": 20,
+      "hi": 30
+    },
+    "fields": {
+      "mode_1": {},
+      "m_odd": {},
+      "m_certified": {
+        "evidence": "certificate for m = 11 (synthetic)"
+      },
+      "k_divides": {},
+      "k_range": {},
+      "x_window": {
+        "x": 25
+      },
+      "profile": {
+        "witness": "w-2",
+        "minDeg": 2,
+        "mass": 41
+      }
+    }
+  }
+}

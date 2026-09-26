@@ -1,0 +1,7 @@
+{
+  "origin": "a fresh copy of live registered keys (0 and 2) must reuse them",
+  "verdict": "reject",
+  "reasons": [
+    "D1_REUSE"
+  ]
+}

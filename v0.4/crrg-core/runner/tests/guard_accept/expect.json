@@ -1,0 +1,6 @@
+{
+  "origin": "synthetic family: a contract discharges every guard field of the shared edge",
+  "verdict": "accept",
+  "reasons": [],
+  "tag": "certifiedEasier"
+}

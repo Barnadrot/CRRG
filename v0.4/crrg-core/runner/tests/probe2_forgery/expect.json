@@ -1,0 +1,13 @@
+{
+  "origin": "Probe2 (G1): a State built through the private constructor with addDecl",
+  "verdict": "reject",
+  "reasons": [
+    "META_COMMAND",
+    "META_IMPORT"
+  ],
+  "reasons_if_lint_bypassed": [
+    "LINEAGE",
+    "META_COMMAND",
+    "META_IMPORT"
+  ]
+}

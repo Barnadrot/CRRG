@@ -1,0 +1,44 @@
+PASS  axiom_cheat: expected reject ['AXIOM']; got reject ['AXIOM'] tag=certifiedEasier
+PASS  classcap_restatement: expected reject ['D1_REUSE']; got reject ['D1_REUSE'] tag=notCertifiedEasier
+PASS  close_by_computation: expected accept [] tag=certifiedEasier; got accept [] tag=certifiedEasier
+PASS  comments_mention_meta: expected accept [] tag=certifiedEasier; got accept [] tag=certifiedEasier
+PASS  d1_conflict_defeq: expected reject ['D1_CONFLICT']; got reject ['D1_CONFLICT'] tag=notCertifiedEasier
+PASS  d1_reuse_live_key: expected reject ['D1_REUSE']; got reject ['D1_REUSE'] tag=notCertifiedEasier
+PASS  dead_root: expected reject ['COMMIT_REJECT:rootRefuted']; got reject ['COMMIT_REJECT:rootRefuted']
+PASS  eval_command: expected reject ['META_COMMAND']; got reject ['META_COMMAND']
+PASS  grow_then_shrink: expected accept [] tag=notCertifiedEasier; got accept [] tag=notCertifiedEasier
+PASS  guard_accept: expected accept [] tag=certifiedEasier; got accept [] tag=certifiedEasier
+PASS  guard_data_no_evidence: expected reject ['GUARD_FIELD_MISSING']; got reject ['GUARD_FIELD_MISSING'] tag=certifiedEasier
+PASS  guard_divides_fails: expected reject ['GUARD_FIELD_FAILS']; got reject ['GUARD_FIELD_FAILS'] tag=certifiedEasier
+PASS  guard_joint_split: expected reject ['GUARD_JOINT_SPLIT']; got reject ['GUARD_JOINT_SPLIT'] tag=certifiedEasier
+PASS  guard_missing_field: expected reject ['GUARD_FIELD_MISSING']; got reject ['GUARD_FIELD_MISSING'] tag=certifiedEasier
+PASS  guard_over_budget: expected reject ['GUARD_FIELD_FAILS']; got reject ['GUARD_FIELD_FAILS'] tag=certifiedEasier
+PASS  guard_unknown_edge: expected reject ['GUARD_UNKNOWN_EDGE']; got reject ['GUARD_UNKNOWN_EDGE'] tag=certifiedEasier
+PASS  guard_window_fails: expected reject ['GUARD_FIELD_FAILS']; got reject ['GUARD_FIELD_FAILS'] tag=certifiedEasier
+PASS  guard_wrong_mode: expected reject ['GUARD_FIELD_FAILS']; got reject ['GUARD_FIELD_FAILS'] tag=certifiedEasier
+PASS  import_audit_transitive: expected reject ['META_IMPORT']; got reject ['META_IMPORT']
+PASS  import_not_allowed: expected reject ['IMPORT_NOT_ALLOWED']; got reject ['IMPORT_NOT_ALLOWED']
+PASS  import_tools: expected reject ['META_IMPORT']; got reject ['META_IMPORT']
+PASS  item4_grow_from_top: expected accept [] tag=notCertifiedEasier; got accept [] tag=notCertifiedEasier
+PASS  item4_growth: expected accept [] tag=notCertifiedEasier; got accept [] tag=notCertifiedEasier
+PASS  item4_restate_measured_root: expected reject ['D1_REUSE']; got reject ['D1_REUSE'] tag=notCertifiedEasier
+PASS  item5_classical_cert: expected reject ['COMPILE_ERROR']; got reject ['COMPILE_ERROR']
+PASS  macro_command: expected reject ['META_COMMAND']; got reject ['META_COMMAND']
+PASS  native_decide: expected reject ['AXIOM']; got reject ['AXIOM'] tag=certifiedEasier
+PASS  private_ctor_syntax: expected reject ['COMPILE_ERROR']; got reject ['COMPILE_ERROR']
+PASS  probe2_forgery: expected reject ['META_COMMAND', 'META_IMPORT']; got reject ['META_COMMAND', 'META_IMPORT']
+PASS  probe2_forgery (lint bypassed): expected reject ['LINEAGE', 'META_COMMAND', 'META_IMPORT']; got reject ['LINEAGE', 'META_COMMAND', 'META_IMPORT'] tag=certifiedEasier
+PASS  probe4_hidden_name: expected reject ['META_COMMAND', 'META_IMPORT']; got reject ['META_COMMAND', 'META_IMPORT']
+PASS  probe4_hidden_name (lint bypassed): expected reject ['LINEAGE', 'META_COMMAND', 'META_IMPORT']; got reject ['LINEAGE', 'META_COMMAND', 'META_IMPORT'] tag=certifiedEasier
+PASS  propositional_restatement: expected accept [] tag=notCertifiedEasier; got accept [] tag=notCertifiedEasier
+PASS  r1_agree: expected accept [] tag=notCertifiedEasier; got accept [] tag=notCertifiedEasier
+PASS  r1_fake_conjunction: expected reject ['R1']; got reject ['R1'] tag=notCertifiedEasier
+PASS  r1_missing: expected reject ['R1']; got reject ['R1'] tag=notCertifiedEasier
+PASS  r1_vacuous: expected reject ['R1']; got reject ['R1'] tag=notCertifiedEasier
+PASS  range_split: expected accept [] tag=certifiedEasier; got accept [] tag=certifiedEasier
+PASS  readmit_by_key: expected reject ['COMMIT_REJECT:learnedConflict']; got reject ['COMMIT_REJECT:learnedConflict']
+PASS  skip_kernel_option: expected reject ['FORBIDDEN_OPTION']; got reject ['FORBIDDEN_OPTION']
+PASS  sorry_cover: expected reject ['AXIOM']; got reject ['AXIOM']
+PASS  split_ab: expected accept [] tag=notCertifiedEasier; got accept [] tag=notCertifiedEasier
+
+42/42 runs as expected (40 cases; forgery cases also run with the lint bypassed)

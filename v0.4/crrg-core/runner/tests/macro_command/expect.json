@@ -1,0 +1,7 @@
+{
+  "origin": "meta-free lint: a user macro",
+  "verdict": "reject",
+  "reasons": [
+    "META_COMMAND"
+  ]
+}
