@@ -215,6 +215,37 @@ the staged implementation plan (§15). Do not reconcile the two.
 
 ## 2. Change log
 
+### v0.11.0 (2026-09-26)
+
+#### `CHG-45` — v0.11.0: the closed core and the classical library
+
+Two new Lean packages sit beside the v0.10 persistence layer and re-build the certified research state from the ground
+up. They close the v0.10 gaps G1–G14, which `crrg-core/STATUS.md` lists gap by gap. The size of the addition: 4,684 lines
+of Lean, plus 1,072 lines of Python for the runner and its tools.
+
+- `crrg-core/`, Lean core only, with no Mathlib:
+  - the state and the typed transitions with their single commit operator;
+  - the frontier invariant, and guarded composition;
+  - the "certified easier" ladder, with record-low credit and `no_infinite_credits`;
+  - sealing, and a runner that admits submissions.
+
+  37 headline declarations, none of which depends on `Classical.choice`, and no `sorry`. The runner passes 42/42
+  (40 cases).
+- `crrg-classical/`, on Mathlib pinned to `c5ea00351c`:
+  - the same machinery on Mathlib objects, with the Dershowitz–Manna bridge `dmlt_iff_isDM`;
+  - the stall rule and the evidence ledger;
+  - crux families, and the list-bound/class-cap converse.
+
+  42 printed declarations, all on the standard axioms.
+
+Both were built from clean with `leanprover/lean4:v4.30.0`, and their logs are in each package. The examples are
+synthetic. Applications to specific research problems, such as adapters over seat-written proof trees, are not
+included; they stay at gate-level trust until gate v2. The v0.10 packages (`CRRG/`, `CRRGTest/`, `Test/`) and
+`Spec.md` are unchanged.
+
+The packages first landed under `v0.4/` (PR #1, named after the consuming project's plan). This release moves them to
+the top level, so the repository carries one version number.
+
 ### Unreleased
 
 Entries are added as `CHG-nn` (implementation) and `SPEC-nn` (specification) as
