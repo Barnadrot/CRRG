@@ -209,22 +209,38 @@ elab "#crrg_admit " s:term:max m:term:max : command => do
 def headConst (e : Expr) : Option Name := e.getAppFn.constName?
 
 /-- Is the tagged lemma `lem` a typed, directed agreement between `c` and a sealed definition?
-Accepted shapes after the binders: `c … ↔ s …`, `s … ↔ c …`, `c … → s …`. -/
+Accepted shapes: `∀ xs, c xs ↔ s …`, `∀ xs, s … ↔ c xs`, and `∀ xs, c xs → s …`, where `c` is applied to
+distinct bound variables (a general agreement, not one instance) and the lemma has no hypothesis other than the
+antecedent `c xs` of the directed form.
+
+v0.11.1: the v0.11.0 check discarded every binder before matching, so `∀ n, False → (c n ↔ s n)` and a specialized
+`c 0 ↔ s 0` were accepted, and the directed form could never match because the telescope had already consumed its
+arrow (independent audit, 2026-09-29, S1-04). -/
 def isAgreementFor (lem c : Name) (inSealed : Name → Bool) : MetaM Bool := do
   let some ci := (← getEnv).find? lem | return false
-  forallTelescope ci.type fun _ body => do
+  forallTelescope ci.type fun xs body => do
     let sealedHead (e : Expr) := match headConst e with
       | some h => inSealed h
       | none => false
-    let isC (e : Expr) := headConst e == some c
+    -- `c` applied to distinct bound variables only
+    let general (e : Expr) : Bool :=
+      headConst e == some c &&
+        (let args := e.getAppArgs
+         args.all Expr.isFVar &&
+           (args.map Expr.fvarId!).toList.eraseDups.length == args.size)
+    let mut hyps : Array Expr := #[]
+    for x in xs do
+      if ← Meta.isProp (← inferType x) then hyps := hyps.push x
     match body.getAppFnArgs with
-    | (``Iff, #[a, b]) => return (isC a && sealedHead b) || (isC b && sealedHead a)
+    | (``Iff, #[a, b]) =>
+      return hyps.isEmpty && ((general a && sealedHead b) || (general b && sealedHead a))
     | _ =>
-      match body with
-      | .forallE _ a b _ =>
-        if b.hasLooseBVars then return false
-        return isC a && sealedHead b
-      | _ => return false
+      -- the directed form: the telescope took the antecedent `c xs` as the last binder
+      if hyps.size != 1 || xs.isEmpty then return false
+      let h := xs[xs.size - 1]!
+      if hyps[0]! != h then return false
+      if body.containsFVar h.fvarId! then return false
+      return general (← inferType h) && sealedHead body
 
 /-- Is there a tagged agreement lemma for `c`? -/
 def hasAgreement (c : Name) (inSealed : Name → Bool) : MetaM Bool := do

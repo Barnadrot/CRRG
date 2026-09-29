@@ -6,8 +6,8 @@ import CRRGCore.State
 A route is a state whose root is `Capstone d`. In an application, `Capstone d` is the frozen target
 statement at parameter `d`. The root is a *type index*, not a `True`-valued link helper, so closing
 the route proves exactly the capstone at `d`. This is Abadi–Lamport's R1,
-"the external statement is preserved", as a type. The gate additionally compares the kernel-term
-seal (`#crrg_seal`) of the banked theorem's statement with that of the frozen statement.
+"the external statement is preserved", as a type. `CertRoute` takes the caller's `Capstone`, so an
+application must bind it to its frozen statement; no seal comparison is implemented yet (STATUS G2, G7).
 -/
 
 namespace CRRGCore

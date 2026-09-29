@@ -1,0 +1,7 @@
+{
+  "origin": "synthetic family: a field overrides the shared instance (m = 13 against m = 11); each check passes on its own values (v0.11.1, independent audit S1-02)",
+  "verdict": "reject",
+  "reasons": [
+    "GUARD_INCONSISTENT"
+  ]
+}

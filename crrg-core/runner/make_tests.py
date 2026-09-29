@@ -236,12 +236,36 @@ case("r1_fake_conjunction",
      "review item 8: a conjunction of tautologies mentioning both names", "reject", ["R1"],
      state=R1_STATE, r1=r1(["Sub.fake"]))
 
+# v0.11.1 (independent audit, 2026-09-29, S1-04): agreements under a hypothesis or at one instance do not count
+case("r1_false_premise",
+     sub(R1_DEFS + "theorem cond (n : Nat) : False → (NewQuantity n ↔ Sealed.Bound n) := fun h => h.elim\n" + R1_MOVE),
+     "R1: an 'agreement' behind an impossible premise (False →)", "reject", ["R1"], state=R1_STATE,
+     r1=r1(["Sub.cond"]))
+
+case("r1_conditional",
+     sub(R1_DEFS + """theorem condPos (n : Nat) (_h : 0 < n) : NewQuantity n ↔ Sealed.Bound n :=
+  ⟨fun _ => rfl, fun _ => Nat.zero_add n⟩
+""" + R1_MOVE),
+     "R1: an agreement under an extra hypothesis (0 < n)", "reject", ["R1"], state=R1_STATE,
+     r1=r1(["Sub.condPos"]))
+
+case("r1_specialized",
+     sub(R1_DEFS + "theorem spec0 : NewQuantity 0 ↔ Sealed.Bound 0 := ⟨fun _ => rfl, fun _ => rfl⟩\n" + R1_MOVE),
+     "R1: an agreement at one instance (n = 0) only", "reject", ["R1"], state=R1_STATE,
+     r1=r1(["Sub.spec0"]))
+
 # ---------------------------------------------------------------- legitimate moves
 case("r1_agree", sub(R1_DEFS + """theorem agree (n : Nat) : NewQuantity n ↔ Sealed.Bound n :=
   ⟨fun _ => rfl, fun _ => Nat.zero_add n⟩
 """ + R1_MOVE),
      "R1: a typed agreement lemma (↔ with the sealed definition)", "accept", [],
      tag="notCertifiedEasier", state=R1_STATE, r1=r1(["Sub.agree"]))
+
+case("r1_implication", sub(R1_DEFS + """theorem toSealed (n : Nat) : NewQuantity n → Sealed.Bound n :=
+  fun _ => rfl
+""" + R1_MOVE),
+     "R1: the directed form (new → sealed), which v0.11.0 documented but could never match", "accept", [],
+     tag="notCertifiedEasier", state=R1_STATE, r1=r1(["Sub.toSealed"]))
 
 case("split_ab", sub("""def split : Split ((S0 (1 = 1) (2 = 2)).leafGoal ⟨0, Nat.zero_lt_one⟩) where
   children := [⟨1 = 1⟩, ⟨2 = 2⟩]
@@ -372,6 +396,11 @@ case("guard_window_fails", sub(LEGIT_MOVE),
 case("guard_over_budget", sub(LEGIT_MOVE),
      "synthetic family: a profile with mass 41, one past the budget", "reject",
      ["GUARD_FIELD_FAILS"], guard_claim=demo(profile={"witness": "w-2", "minDeg": 2, "mass": 41}))
+
+case("guard_inconsistent_instance", sub(LEGIT_MOVE),
+     "synthetic family: a field overrides the shared instance (m = 13 against m = 11); each check passes on its own "
+     "values (v0.11.1, independent audit S1-02)", "reject", ["GUARD_INCONSISTENT"],
+     guard_claim=demo(m_odd={"m": 13}))
 
 case("guard_wrong_mode", sub(LEGIT_MOVE),
      "synthetic family: a consumer in mode 2 claims the edge", "reject", ["GUARD_FIELD_FAILS"],

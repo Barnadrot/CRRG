@@ -1,0 +1,16 @@
+{
+  "submission": "Submission.lean",
+  "imports": [
+    "CRRGExamples.Negatives"
+  ],
+  "state": "CRRGExamples.H0 (∀ n, Sub.Sealed.Bound n)",
+  "move": "Sub.move",
+  "r1": {
+    "sealed": [
+      "Sub.Sealed"
+    ],
+    "agreements": [
+      "Sub.toSealed"
+    ]
+  }
+}

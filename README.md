@@ -14,7 +14,7 @@ CRRG is **not** a scalar reward function. A green integrity check is not mathema
 
 ## Status
 
-Current version: **v0.11.0**. It adds the closed core (`crrg-core/`) and the classical library (`crrg-classical/`): 4,684 lines of Lean and 1,072 of Python. The v0.10 specification and its persistence layer (`CRRG/`, `Spec.md`) are unchanged.
+Current version: **v0.11.1**, which corrects v0.11.0 after an independent audit (see `CHANGELOG.md`, CHG-46). v0.11.0 added the closed core (`crrg-core/`) and the classical library (`crrg-classical/`): 4,684 lines of Lean and 1,072 of Python. The v0.10 specification and its persistence layer (`CRRG/`, `Spec.md`) are unchanged.
 
 The persistence layer is implemented and has been exercised in a live Reed–Solomon autoresearch deployment in `Barnadrot/proximity-research`. That deployment has produced certified refinements and closures, caught live semantic drift, deduplicated identical obligations, separated `NO_TRANSITION` from admitted graph movement, and exercised first- and second-order stall handling.
 

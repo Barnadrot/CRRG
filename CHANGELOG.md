@@ -215,12 +215,40 @@ the staged implementation plan (§15). Do not reconcile the two.
 
 ## 2. Change log
 
+### v0.11.1 (2026-09-29)
+
+#### `CHG-46` — v0.11.1: corrections after an independent audit
+
+An independent, read-only audit (Codex GPT-6 Astra, 2026-09-29) checked the core, the classical library and every
+claim in this repository's documentation against the sources. It found the mathematics sound: no false derivation, no
+hidden axiom, no `sorry` in the certified libraries. It also found overstated claims and two defects. This release
+changes nothing that any certified theorem states.
+
+- **R1 on definitions** (`CRRGTools/Seal.lean`, `isAgreementFor`). The check discarded every binder before matching,
+  so an "agreement" behind an impossible premise (`∀ n, False → (D n ↔ S n)`) or at one instance (`D 0 ↔ S 0`)
+  counted. The directed form `D … → S …` could never match. An agreement must now be general (`D` applied to distinct
+  bound variables) and unconditional (no hypothesis beyond the antecedent of the directed form).
+  New runner cases: `r1_false_premise`, `r1_conditional` and `r1_specialized` (all rejected), and `r1_implication`
+  (accepted).
+- **The guard-fields rule** (`runner/guard_fields.py`). Each field could override the shared instance, so contradictory
+  guards could both pass. Fields are now discharged on one instance (`GUARD_INCONSISTENT`). New case:
+  `guard_inconsistent_instance`.
+- **Documentation corrected:**
+  - CHG-45's "close the v0.10 gaps G1–G14" overstated it. G3 and G5–G11 have their content in Lean; G1 and G4 are
+    closed by runner code and tooling; G2 and G12 are partly closed; G13 is out of scope; G14 was dropped. See
+    `crrg-core/STATUS.md`.
+  - The runner's tag is compiled evaluation (`#eval`), not kernel-computed.
+  - D1 rejects a reuse (`D1_REUSE`); it does not rewrite it.
+  - The production seal (sha256 over `lean4export`) is planned, not built.
+  - No capstone seal comparison is implemented (`CRRGCore/Route.lean` comment).
+  - `unparked_needs_conflicts` concerns outcome labels, not verified new conflicts.
+
 ### v0.11.0 (2026-09-26)
 
 #### `CHG-45` — v0.11.0: the closed core and the classical library
 
 Two new Lean packages sit beside the v0.10 persistence layer and re-build the certified research state from the ground
-up. They close the v0.10 gaps G1–G14, which `crrg-core/STATUS.md` lists gap by gap. The size of the addition: 4,684 lines
+up. They close the v0.10 gaps G1–G14, which `crrg-core/STATUS.md` lists gap by gap (overstated; corrected in CHG-46). The size of the addition: 4,684 lines
 of Lean, plus 1,072 lines of Python for the runner and its tools.
 
 - `crrg-core/`, Lean core only, with no Mathlib:

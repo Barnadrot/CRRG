@@ -63,9 +63,13 @@ correct. The trusted code is `CRRGCore`, `CRRGTools` and `runner/crrg_runner.py`
 5. **Canonical keys.** A fresh claim is never definitionally equal to a registered key. Duplicates must reuse
    the key.
 6. **R1 on definitions.** Every new definition the move's claims depend on is sealed, or is tied to a sealed
-   definition by a typed, directed lemma. Co-occurrence and vacuous lemmas do not count.
+   definition by a typed, directed lemma: general (the definition applied to distinct bound variables) and
+   unconditional (no hypothesis beyond the antecedent of the directed form). Co-occurrence, vacuous lemmas,
+   lemmas behind a premise and one-instance lemmas do not count (v0.11.1).
 7. **Accounting.**
-   - The reported tag is `creditOf`, computed by the kernel.
+   - The reported tag is `creditOf`, computed by compiled evaluation (`#eval CRRGTools.commitSummary`). The kernel
+     proves what that tag licenses (`creditOf_sound`, `runner_credit_sound` in crrg-classical), given the evaluated
+     result; the Python runner and the compiled evaluation are trusted, not proved.
    - Credit is given only below the record (`creditOf_sound`, `commit_credit_record`).
    - No run earns infinitely many credits (`no_infinite_credits`).
    - Growth, restatement and grow-then-shrink are admitted without credit (`item4_growth`,
@@ -112,10 +116,10 @@ correct. The trusted code is `CRRGCore`, `CRRGTools` and `runner/crrg_runner.py`
 | rung 2 | `item5_classical_cert` | `COMPILE_ERROR` (a classical certificate does not evaluate) |
 | restatements | `d1_conflict_defeq`; `d1_reuse_live_key`, `classcap_restatement`, `item4_restate_measured_root` | `D1_CONFLICT`; `D1_REUSE` |
 | negatives in the kernel | `readmit_by_key`, `dead_root` | `COMMIT_REJECT:learnedConflict`, `COMMIT_REJECT:rootRefuted` |
-| R1 | `r1_missing`, `r1_vacuous`, `r1_fake_conjunction` / `r1_agree` | `R1` / accept |
+| R1 | `r1_missing`, `r1_vacuous`, `r1_fake_conjunction`, `r1_false_premise`, `r1_conditional`, `r1_specialized` / `r1_agree`, `r1_implication` | `R1` / accept |
 | legitimate | `split_ab`, `range_split`, `close_by_computation`, `item4_growth`, `item4_grow_from_top`, `grow_then_shrink` | accept, with the right tag |
 | known limit | `propositional_restatement` | accept (documented above) |
-| guard-fields rule (the **synthetic** family `families/demo.json`) | `guard_accept` / `guard_missing_field`, `guard_data_no_evidence` / `guard_window_fails`, `guard_over_budget`, `guard_wrong_mode`, `guard_divides_fails` / `guard_joint_split` / `guard_unknown_edge` | accept / `GUARD_FIELD_MISSING` / `GUARD_FIELD_FAILS` / `GUARD_JOINT_SPLIT` / `GUARD_UNKNOWN_EDGE` |
+| guard-fields rule (the **synthetic** family `families/demo.json`) | `guard_accept` / `guard_missing_field`, `guard_data_no_evidence` / `guard_window_fails`, `guard_over_budget`, `guard_wrong_mode`, `guard_divides_fails` / `guard_joint_split` / `guard_unknown_edge` / `guard_inconsistent_instance` | accept / `GUARD_FIELD_MISSING` / `GUARD_FIELD_FAILS` / `GUARD_JOINT_SPLIT` / `GUARD_UNKNOWN_EDGE` / `GUARD_INCONSISTENT` |
 
 Regenerate the cases with `python3 runner/make_tests.py`. The case sources are committed, so they can be
 read without running anything.

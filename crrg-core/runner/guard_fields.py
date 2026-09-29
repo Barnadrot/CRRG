@@ -83,6 +83,7 @@ def check_guard_claim(claim):
     if edge is None:
         return ["GUARD_UNKNOWN_EDGE"], [f"no edge {claim.get('arrow')} in family {claim.get('family')}"]
     fields = claim.get("fields", {})
+    seen = {}   # value name -> (field id, value) across all fields (v0.11.1)
     for g in edge["guard"]:
         fid = g["id"]
         entry = fields.get(fid)
@@ -108,7 +109,20 @@ def check_guard_claim(claim):
                 reasons.append("GUARD_FIELD_MISSING")
                 details.append(f"{fid}: joint guard needs one named witness")
                 continue
-        env = dict(claim.get("instance", {}))
+        # v0.11.1 (independent audit, 2026-09-29, S1-02): every field is discharged on ONE instance. A field may add
+        # names, but it may not override a value of the shared instance, and two fields may not give one name two values.
+        inst = claim.get("instance", {})
+        vals = {k: v for k, v in entry.items() if k not in ("evidence", "witness")}
+        clash = sorted(k for k, v in vals.items() if k in inst and inst[k] != v)
+        if clash:
+            reasons.append("GUARD_INCONSISTENT")
+            details.append(f"{fid}: overrides the shared instance on {', '.join(clash)}")
+        for k, v in vals.items():
+            if k in seen and seen[k][1] != v:
+                reasons.append("GUARD_INCONSISTENT")
+                details.append(f"{fid}: {k} = {v!r} disagrees with {seen[k][0]} ({k} = {seen[k][1]!r})")
+            seen.setdefault(k, (fid, v))
+        env = dict(inst)
         env.update({k: v for k, v in entry.items() if k != "evidence"})
         if not evaluate(g["check"], env):
             reasons.append("GUARD_FIELD_FAILS")
