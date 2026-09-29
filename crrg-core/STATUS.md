@@ -23,8 +23,10 @@ mathematics sound: no false derivation, no hidden axiom, no `sorry`. It found ov
 - there is no `sorry` in the core;
 - the core does not import `Lean`;
 - both seal probe pairs differ;
-- the runner suite gives 42/42 runs as expected (40 cases, including 9 guard-fields cases on a synthetic
-  family, plus the two forgeries rerun with the lint bypassed).
+- the runner suite gives 47/47 runs as expected (45 cases, including 10 guard-fields cases on a synthetic
+  family and 7 R1 cases, plus the two forgeries rerun with the lint bypassed). Run it with the v4.30.0 toolchain
+  first on `PATH`: the runner calls `lean` from a temporary directory, where elan's default toolchain may differ.
+  (v0.11.1, rebuilt from clean on the Lean machine, 2026-09-29.)
 
 See `BUILD.log` and `runner/TESTS.log`.
 

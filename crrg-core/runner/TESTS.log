@@ -10,6 +10,7 @@ PASS  grow_then_shrink: expected accept [] tag=notCertifiedEasier; got accept []
 PASS  guard_accept: expected accept [] tag=certifiedEasier; got accept [] tag=certifiedEasier
 PASS  guard_data_no_evidence: expected reject ['GUARD_FIELD_MISSING']; got reject ['GUARD_FIELD_MISSING'] tag=certifiedEasier
 PASS  guard_divides_fails: expected reject ['GUARD_FIELD_FAILS']; got reject ['GUARD_FIELD_FAILS'] tag=certifiedEasier
+PASS  guard_inconsistent_instance: expected reject ['GUARD_INCONSISTENT']; got reject ['GUARD_INCONSISTENT'] tag=certifiedEasier
 PASS  guard_joint_split: expected reject ['GUARD_JOINT_SPLIT']; got reject ['GUARD_JOINT_SPLIT'] tag=certifiedEasier
 PASS  guard_missing_field: expected reject ['GUARD_FIELD_MISSING']; got reject ['GUARD_FIELD_MISSING'] tag=certifiedEasier
 PASS  guard_over_budget: expected reject ['GUARD_FIELD_FAILS']; got reject ['GUARD_FIELD_FAILS'] tag=certifiedEasier
@@ -32,8 +33,12 @@ PASS  probe4_hidden_name: expected reject ['META_COMMAND', 'META_IMPORT']; got r
 PASS  probe4_hidden_name (lint bypassed): expected reject ['LINEAGE', 'META_COMMAND', 'META_IMPORT']; got reject ['LINEAGE', 'META_COMMAND', 'META_IMPORT'] tag=certifiedEasier
 PASS  propositional_restatement: expected accept [] tag=notCertifiedEasier; got accept [] tag=notCertifiedEasier
 PASS  r1_agree: expected accept [] tag=notCertifiedEasier; got accept [] tag=notCertifiedEasier
+PASS  r1_conditional: expected reject ['R1']; got reject ['R1'] tag=notCertifiedEasier
 PASS  r1_fake_conjunction: expected reject ['R1']; got reject ['R1'] tag=notCertifiedEasier
+PASS  r1_false_premise: expected reject ['R1']; got reject ['R1'] tag=notCertifiedEasier
+PASS  r1_implication: expected accept [] tag=notCertifiedEasier; got accept [] tag=notCertifiedEasier
 PASS  r1_missing: expected reject ['R1']; got reject ['R1'] tag=notCertifiedEasier
+PASS  r1_specialized: expected reject ['R1']; got reject ['R1'] tag=notCertifiedEasier
 PASS  r1_vacuous: expected reject ['R1']; got reject ['R1'] tag=notCertifiedEasier
 PASS  range_split: expected accept [] tag=certifiedEasier; got accept [] tag=certifiedEasier
 PASS  readmit_by_key: expected reject ['COMMIT_REJECT:learnedConflict']; got reject ['COMMIT_REJECT:learnedConflict']
@@ -41,4 +46,4 @@ PASS  skip_kernel_option: expected reject ['FORBIDDEN_OPTION']; got reject ['FOR
 PASS  sorry_cover: expected reject ['AXIOM']; got reject ['AXIOM']
 PASS  split_ab: expected accept [] tag=notCertifiedEasier; got accept [] tag=notCertifiedEasier
 
-42/42 runs as expected (40 cases; forgery cases also run with the lint bypassed)
+47/47 runs as expected (45 cases; forgery cases also run with the lint bypassed)
