@@ -5,19 +5,19 @@
 # command: ./build.sh  (clean: .lake/build removed first; then lake build CRRGCore, CRRGTools, CRRGExamples; then the seal probes; then the runner suite)
 
 ## lake build CRRGCore
-✔ [2/8] Built CRRGCore.Basic (225ms)
-✔ [3/8] Built CRRGCore.Easier (280ms)
-✔ [4/8] Built CRRGCore.Guarded (272ms)
-✔ [5/8] Built CRRGCore.State (514ms)
-✔ [6/8] Built CRRGCore.Route (161ms)
-✔ [7/8] Built CRRGCore (159ms)
+✔ [2/8] Built CRRGCore.Basic (213ms)
+✔ [3/8] Built CRRGCore.Easier (258ms)
+✔ [4/8] Built CRRGCore.Guarded (251ms)
+✔ [5/8] Built CRRGCore.State (467ms)
+✔ [6/8] Built CRRGCore.Route (144ms)
+✔ [7/8] Built CRRGCore (137ms)
 Build completed successfully (8 jobs).
 exit: 0
 
 ## lake build CRRGTools
-✔ [8/11] Built CRRGTools.Seal (1.0s)
-✔ [9/11] Built CRRGTools.Runner (891ms)
-✔ [10/11] Built CRRGTools (652ms)
+✔ [8/11] Built CRRGTools.Seal (937ms)
+✔ [9/11] Built CRRGTools.Runner (806ms)
+✔ [10/11] Built CRRGTools (577ms)
 Build completed successfully (11 jobs).
 exit: 0
 
@@ -26,7 +26,8 @@ FamilyDemoJson.lean is up to date with families/demo.json
 exit: 0
 
 ## lake build CRRGExamples
-ℹ [11/22] Built CRRGExamples.Axioms (334ms)
+✔ [11/22] Built CRRGExamples.Lane (207ms)
+ℹ [12/22] Built CRRGExamples.Axioms (314ms)
 info: CRRGExamples/Axioms.lean:8:0: 'CRRGCore.Frontier.replaceAt_transition' depends on axioms: [propext, Quot.sound]
 info: CRRGExamples/Axioms.lean:9:0: 'CRRGCore.Chain.closeRoot' does not depend on any axioms
 info: CRRGExamples/Axioms.lean:10:0: 'CRRGCore.Frontier.dead_of_refuted' does not depend on any axioms
@@ -64,15 +65,14 @@ info: CRRGExamples/Axioms.lean:44:0: 'CRRGCore.State.rootRefuted_sound' depends 
 info: CRRGExamples/Axioms.lean:45:0: 'CRRGCore.resolve_claims' depends on axioms: [propext, Quot.sound]
 info: CRRGExamples/Axioms.lean:47:0: 'CRRGCore.CertRoute.closes' depends on axioms: [propext, Quot.sound]
 info: CRRGExamples/Axioms.lean:48:0: 'CRRGCore.CertRoute.refuted' depends on axioms: [propext, Quot.sound]
-✔ [12/22] Built CRRGExamples.NoMeta (232ms)
-✔ [13/22] Built CRRGExamples.Basic (398ms)
-✔ [14/22] Built CRRGExamples.Lane (390ms)
-✔ [15/22] Built CRRGExamples.CruxFamily (740ms)
-✔ [16/22] Built CRRGExamples.Negatives (476ms)
-✔ [17/22] Built CRRGExamples.FamilyDemoJson (200ms)
-✔ [18/22] Built CRRGExamples.FamilyAgreement (234ms)
-✔ [19/22] Built CRRGExamples.Lineage (7.2s)
-ℹ [20/22] Built CRRGExamples.Audit (7.4s)
+✔ [13/22] Built CRRGExamples.NoMeta (256ms)
+✔ [14/22] Built CRRGExamples.Basic (369ms)
+✔ [15/22] Built CRRGExamples.CruxFamily (690ms)
+✔ [16/22] Built CRRGExamples.Negatives (428ms)
+✔ [17/22] Built CRRGExamples.FamilyDemoJson (180ms)
+✔ [18/22] Built CRRGExamples.FamilyAgreement (222ms)
+✔ [19/22] Built CRRGExamples.Lineage (6.9s)
+ℹ [20/22] Built CRRGExamples.Audit (7.1s)
 info: CRRGExamples/Audit.lean:20:0: crrg mechanical certificate audited: CRRGExamples.evenCert, axioms []
 info: CRRGExamples/Audit.lean:44:0: crrg restatement detected (D1): CRRGExamples.ListBound ≡ CRRGExamples.ClassCap
 info: CRRGExamples/Audit.lean:52:0: crrg seal CRRGExamples.ListBound: 6040959509963729131 (closure of 1 declarations)
@@ -81,7 +81,7 @@ info: CRRGExamples/Audit.lean:92:0: crrg definitions agree (R1): CRRGExamples.Le
 info: CRRGExamples/Audit.lean:109:0: crrg lineage ok: no constant outside CRRGCore references a private core name
 info: CRRGExamples/Audit.lean:132:0: crrg admission: D1 clean (1 fresh claims)
 info: CRRGExamples/Audit.lean:140:0: crrg admission: D1 clean; reuse keys for definitionally equal fresh claims: [0, 2]
-✔ [21/22] Built CRRGExamples (624ms)
+✔ [21/22] Built CRRGExamples (637ms)
 Build completed successfully (22 jobs).
 exit: 0
 
@@ -91,7 +91,7 @@ seal probe shape: before [crrg seal Probe.Shape.root: 14008864835774671097] afte
 exit: 0
 
 ## runner suite (runner/run_tests.py; details in runner/TESTS.log)
-42/42 runs as expected (40 cases; forgery cases also run with the lint bypassed)
+47/47 runs as expected (45 cases; forgery cases also run with the lint bypassed)
 exit: 0
 
 ## summary

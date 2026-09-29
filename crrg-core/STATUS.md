@@ -3,6 +3,17 @@
 What the package proves, what the runner tests, and what stays open. The review items (1–7) are those of
 the design review of the first build; the gaps (G1–G14) are those of CRRG v0.10.
 
+**v0.11.1 (2026-09-29).** Corrections after an independent audit (Codex GPT-6 Astra, read-only). It found the core's
+mathematics sound: no false derivation, no hidden axiom, no `sorry`. It found overstated claims and two defects:
+- R1's agreement check discarded a lemma's hypotheses and accepted one-instance lemmas. It is now tightened, with four
+  new runner cases.
+- The runner's guard-fields rule let each field override the shared instance. It now refuses that with
+  `GUARD_INCONSISTENT`, with one new case.
+- The gap table now says which gaps are closed in Lean and which by runner code or tooling.
+- The runner's tag is compiled evaluation, not kernel-computed.
+- D1 rejects a reuse; it does not rewrite it.
+- The production seal is planned, not built.
+
 ## State
 
 `./build.sh`, with Lean v4.30.0, from clean:
@@ -12,8 +23,10 @@ the design review of the first build; the gaps (G1–G14) are those of CRRG v0.1
 - there is no `sorry` in the core;
 - the core does not import `Lean`;
 - both seal probe pairs differ;
-- the runner suite gives 42/42 runs as expected (40 cases, including 9 guard-fields cases on a synthetic
-  family, plus the two forgeries rerun with the lint bypassed).
+- the runner suite gives 47/47 runs as expected (45 cases, including 10 guard-fields cases on a synthetic
+  family and 7 R1 cases, plus the two forgeries rerun with the lint bypassed). Run it with the v4.30.0 toolchain
+  first on `PATH`: the runner calls `lean` from a temporary directory, where elan's default toolchain may differ.
+  (v0.11.1, rebuilt from clean on the Lean machine, 2026-09-29.)
 
 See `BUILD.log` and `runner/TESTS.log`.
 
@@ -48,16 +61,16 @@ The runner checks are **executable and tested**, not just argued (`RUNNER.md`).
 
 | Gap | Now | How | What still leaks, if anything |
 |---|---|---|---|
-| G1 commit step | **closed; the runner obligation is tested** | private `State` constructor; `commit` is the only producer from a move; `commit_transition`; `#crrg_check_lineage`; submissions must be meta-free | the kernel does not enforce `private`, so lineage in the presence of metaprogramming rests on the audit and on the meta-free rule, both run by the gate. The runner's own loop has no Abadi–Lamport refinement proof |
+| G1 commit step | **closed as a runner obligation (tested), not by a Lean theorem** | private `State` constructor; `commit` is the only producer from a move; `commit_transition`; `#crrg_check_lineage`; submissions must be meta-free | the kernel does not enforce `private`, so lineage in the presence of metaprogramming rests on the audit and on the meta-free rule, both run by the gate. The runner's own loop has no Abadi–Lamport refinement proof |
 | G2 seal by kernel term | **partly closed** | `#crrg_seal` fingerprints complete declarations over the non-core closure, including constructors | a 64-bit hash, not cryptographic; name-sensitive by policy. Production: sha256 over `lean4export` in the signed runner |
 | G3 seal record | **closed for soundness** | registry keys are indices assigned by `commit`; no hash occurs in any theorem | seals remain an out-of-kernel identity for deduplication across routes |
-| G4 seal coverage | **closed** | the closure follows every non-core constant, including constructors and the inductive block | `Init`/`Lean`/`Std` are pinned by the toolchain, not hashed |
+| G4 seal coverage | **closed by tooling** | the closure (a `CRRGTools` metaprogram, not a kernel theorem) follows every non-core constant, including constructors and the inductive block | `Init`/`Lean`/`Std` are pinned by the toolchain, not hashed |
 | G5 negatives and backtracking | **closed** | `refute`, `learn`, `backtrackTarget_ok`, `commit_no_conflict`, `commit_rootRefuted` | a propositional restatement under a new key is blocked once a detector supplies the implication (`learn`). D1 runs at admission (`#crrg_admit`) |
 | G6 guard composition | **closed** | `guardedComp`, `guardedComp_escapes` | binary, like ArkLib; n-ary by iteration |
-| G7 True-valued links | **closed** | `CertRoute` makes the root `Capstone d` by type | the gate still compares the banked statement's seal with the frozen file's (G2 caveat) |
-| G8 outcome classification | **closed** | `commit : … → Except Reject (State × Tag)`, computed | — |
+| G7 True-valued links | **closed** | `CertRoute` makes the root `Capstone d` by type | `CertRoute` takes the caller's `Capstone`; no seal comparison with the frozen statement is implemented yet (G2) |
+| G8 outcome classification | **closed** | `commit : … → Except Reject (State × Tag)`, computed | the runner reads the result by `#eval` (compiled evaluation, trusted) |
 | G9 unchecked metadata | **closed** | outcomes carry proofs; no free-text hash fields | — |
-| G10 accounting | **closed** | rung 1 by proof; rung 2 by kernel evaluation (`closeByComputation`); rung 3 by owner-pinned families with in-family strict decrease; credit by the record-low rule; `no_infinite_credits` | measures are only as meaningful as the owner's families |
+| G10 accounting | **closed** | rung 1 by proof; rung 2 by a proof of the evaluator's result (`closeByComputation`: the kernel checks the proof, not that it came from evaluation); rung 3 by owner-pinned families with in-family strict decrease; credit by the record-low rule; `no_infinite_credits` | measures are only as meaningful as the owner's families |
 | G11 unbounded types | **closed** | finite lists of leaves and children | — |
 | G12 identity / dedup | **partly closed** | keys, `Child.old` reuse, D1 at admission with key reuse, conflict propagation | equivalence beyond definitional equality is undecidable. It needs detectors (two-way kernel arrows, a referee) feeding `learn`. Example 4b shows the gap and the remedy |
 | G13 governance | out of scope | — | owner signatures and the pinning of `fams` live outside Lean |

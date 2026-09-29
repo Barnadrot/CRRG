@@ -6,8 +6,9 @@ reject**. It builds on three foundations:
 - Abadi–Lamport **refinement mappings**;
 - **CWSS**, which is Fenzi–Moghaddas–Nguyen's, together with ArkLib's **guarded CWSS** implementation.
 
-It keeps what already holds in CRRG v0.10 and closes that version's gaps G1–G14 (listed gap by gap in
-`STATUS.md`).
+It keeps what already holds in CRRG v0.10 and addresses that version's gaps G1–G14 (listed gap by gap in
+`STATUS.md`): G3 and G5–G11 have their content in Lean, G1 and G4 are closed by runner code and tooling rather than by
+a Lean theorem, G2 and G12 are partly closed, G13 is outside the core, and G14 was dropped.
 
 - **Toolchain.** `leanprover/lean4:v4.30.0`. There are no dependencies: Lean core only, no Mathlib, including
   for the multiset lift.
@@ -59,14 +60,17 @@ implements all of them, and a negative-control suite tests them (`RUNNER.md`).
    constant declared outside the `CRRGCore` modules may mention a private core name, whatever its own name.
 3. **D1 runs at admission.** Before `commit`, the runner runs `#crrg_admit S m`:
    - it rejects a move whose fresh child claim is definitionally equal to a learned conflict;
-   - it rewrites a fresh claim that is definitionally equal to a live key into `Child.old` of that key.
+   - it reports a fresh claim that is definitionally equal to a live key; the runner rejects that move
+     (`D1_REUSE`), and the corrected proposal must reuse the key as `Child.old`.
 
    Propositional equivalents enter through `State.learn` once a detector supplies the implication.
-4. **R1 on definitions.** `#crrg_check_defs leaf [sealed namespaces]` must pass for every new leaf.
+4. **R1 on definitions.** `#crrg_check_defs leaf [sealed namespaces]` must pass for every new leaf. Since v0.11.1
+   an agreement must be general and unconditional (see the table below); sealed status is still a namespace-prefix
+   test, not pinned provenance.
 5. **Seal policy.** The seal is a **name-sensitive declaration fingerprint**, not a meaning test.
    - Renaming an auxiliary changes it, by design.
    - Changing a constructor changes it (`probes/seal/`).
-   - Production computes sha256 over a `lean4export` of the same closure.
+   - Planned, not built: production would compute sha256 over a `lean4export` of the same closure (STATUS G2).
 
 ## Theorems and what they close
 
@@ -93,7 +97,7 @@ implements all of them, and a negative-control suite tests them (`RUNNER.md`).
 | `State.commit_transition` (State) | **every accepted commit is a `Transition`** of the frontier | G1 |
 | `State.commit` (State) | returns `Except Reject (State × Tag)`; `Reject` and `Tag` are typed and computed | G8 |
 | `CertRoute`, `CertRoute.closes`, `CertRoute.refuted` (Route) | the root is `Capstone d` by type (Abadi–Lamport R1: the external statement is preserved) | G7: no `True`-valued links |
-| `#crrg_check_defs` + `@[crrg_agree]` (CRRGTools) | R1 on definitions: every non-core definition a leaf uses is sealed, or has a **typed, directed** agreement lemma `D … ↔ S …`, `S … ↔ D …` or `D … → S …`; co-occurrence does not count | R1 on definitions |
+| `#crrg_check_defs` + `@[crrg_agree]` (CRRGTools) | R1 on definitions: every non-core definition a leaf uses is sealed, or has a **typed, directed** agreement lemma `∀ xs, D xs ↔ S …`, `∀ xs, S … ↔ D xs` or `∀ xs, D xs → S …`, with `D` applied to distinct bound variables and no other hypothesis (v0.11.1; v0.11.0 accepted agreements behind a discarded premise); co-occurrence does not count | R1 on definitions |
 | `#crrg_check_lineage` (CRRGTools) | no constant outside `CRRGCore` mentions a private core name | G1 against metaprogramming |
 | `WitnessMap.toEdge` (Guarded) | a counterexample map is R2 between zero-step specifications | kept |
 

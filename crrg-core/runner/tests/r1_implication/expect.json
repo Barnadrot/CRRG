@@ -1,0 +1,6 @@
+{
+  "origin": "R1: the directed form (new → sealed), which v0.11.0 documented but could never match",
+  "verdict": "accept",
+  "reasons": [],
+  "tag": "notCertifiedEasier"
+}
