@@ -1,4 +1,6 @@
 import CRRGClassical.Easier
+import CRRGClassical.DMCheck
+import CRRGClassical.RegionProgress
 import CRRGClassical.State
 import CRRGClassical.Route
 import CRRGClassical.Converse
@@ -51,3 +53,29 @@ open CRRGClassical
 #print axioms recordAll_state
 #print axioms no_ingredient_refused
 #print axioms admitted_cites_new
+-- v0.12.0. Cancellation and a computed Dershowitz-Manna checker with proof-producing certificates
+#print axioms dm_add_cancel
+#print axioms dm_singleton_iff
+#print axioms dm_aligned_singleton_iff
+#print axioms dmCheck_sound_complete
+#print axioms withComputedCert_credited_iff
+-- v0.12.0. Credited labels stay at or below the root's label
+#print axioms dmlt_le_some
+#print axioms record_le_root
+#print axioms credited_le_root
+#print axioms top_root_credit
+#print axioms creditOf_top_iff
+-- v0.12.0. Stalls with steps where nothing changes; faithful lane logs; the gate model's lanes
+#print axioms no_infinite_credits_stutter
+#print axioms dichotomy
+#print axioms faithful_newConflict_refuted
+#print axioms lane_progress_unparks
+#print axioms lane_projection_faithful
+#print axioms gate_lane_dichotomy
+-- v0.12.0. A finite region model (separate from the certified state)
+#print axioms RegionProgress.root_iff_open
+#print axioms RegionProgress.frontier_counterexample_refutes_root
+#print axioms RegionProgress.split_close_bound
+#print axioms RegionProgress.empty_root_zero_steps
+#print axioms RegionProgress.split_weight_conserved
+#print axioms RegionProgress.close_weight_decreases

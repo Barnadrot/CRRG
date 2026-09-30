@@ -46,3 +46,30 @@ open CRRGCore
 -- Route
 #print axioms CertRoute.closes
 #print axioms CertRoute.refuted
+-- v0.12.0. Guarded: the n-ary chain; no child of a guarded composition can be dropped
+#print axioms guardedChain
+#print axioms guardedChain_two
+#print axioms guardedComp_irredundant
+#print axioms guardedChain_irredundant
+-- v0.12.0. State along runs (steps where nothing changes included): learned conflicts persist
+#print axioms State.initial_clean
+#print axioms State.advance_conflicts
+#print axioms State.advance_clean
+#print axioms State.run_conflicts_mono
+#print axioms State.run_clean
+#print axioms State.run_no_readmission
+#print axioms State.run_conflict_refuted
+-- v0.12.0. State: a self-move is accepted without credit, forever (acceptance by commit only)
+#print axioms State.selfMove_commit
+#print axioms State.infinite_uncredited
+-- v0.12.0. Arith: closed integer arithmetic by reflection (rung 2)
+#print axioms Arith.Formula.check_iff
+#print axioms Arith.Formula.mechCert
+-- v0.12.0. Gate: a DESIGNED model of the gate (not the deployed gate or the runner)
+#print axioms Gate.step_refines
+#print axioms Gate.refines
+#print axioms Gate.no_infinite_credits
+#print axioms Gate.appended_event_sound
+#print axioms Gate.run_journal_ok
+#print axioms Gate.journal_ids_unique
+#print axioms Gate.fair_extension

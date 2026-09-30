@@ -5,20 +5,22 @@
 # command: ./build.sh  (clean: .lake/build removed first; then lake build CRRGCore, CRRGTools, CRRGExamples; then the seal probes; then the runner suite)
 
 ## lake build CRRGCore
-✔ [2/8] Built CRRGCore.Basic (213ms)
-✔ [3/8] Built CRRGCore.Easier (258ms)
-✔ [4/8] Built CRRGCore.Guarded (251ms)
-✔ [5/8] Built CRRGCore.State (467ms)
-✔ [6/8] Built CRRGCore.Route (144ms)
-✔ [7/8] Built CRRGCore (137ms)
-Build completed successfully (8 jobs).
+✔ [2/10] Built CRRGCore.Basic (250ms)
+✔ [3/10] Built CRRGCore.Easier (265ms)
+✔ [4/10] Built CRRGCore.Guarded (365ms)
+✔ [5/10] Built CRRGCore.Arith (259ms)
+✔ [6/10] Built CRRGCore.State (614ms)
+✔ [7/10] Built CRRGCore.Route (159ms)
+✔ [8/10] Built CRRGCore.Gate (354ms)
+✔ [9/10] Built CRRGCore (146ms)
+Build completed successfully (10 jobs).
 exit: 0
 
 ## lake build CRRGTools
-✔ [8/11] Built CRRGTools.Seal (937ms)
-✔ [9/11] Built CRRGTools.Runner (806ms)
-✔ [10/11] Built CRRGTools (577ms)
-Build completed successfully (11 jobs).
+✔ [10/13] Built CRRGTools.Seal (3.8s)
+✔ [11/13] Built CRRGTools.Runner (833ms)
+✔ [12/13] Built CRRGTools (576ms)
+Build completed successfully (13 jobs).
 exit: 0
 
 ## families/gen_lean.py --check (the JSON-derived Lean data is up to date with families/demo.json)
@@ -26,8 +28,8 @@ FamilyDemoJson.lean is up to date with families/demo.json
 exit: 0
 
 ## lake build CRRGExamples
-✔ [11/22] Built CRRGExamples.Lane (207ms)
-ℹ [12/22] Built CRRGExamples.Axioms (314ms)
+✔ [13/25] Built CRRGExamples.Basic (324ms)
+ℹ [14/25] Built CRRGExamples.Axioms (267ms)
 info: CRRGExamples/Axioms.lean:8:0: 'CRRGCore.Frontier.replaceAt_transition' depends on axioms: [propext, Quot.sound]
 info: CRRGExamples/Axioms.lean:9:0: 'CRRGCore.Chain.closeRoot' does not depend on any axioms
 info: CRRGExamples/Axioms.lean:10:0: 'CRRGCore.Frontier.dead_of_refuted' does not depend on any axioms
@@ -65,14 +67,38 @@ info: CRRGExamples/Axioms.lean:44:0: 'CRRGCore.State.rootRefuted_sound' depends 
 info: CRRGExamples/Axioms.lean:45:0: 'CRRGCore.resolve_claims' depends on axioms: [propext, Quot.sound]
 info: CRRGExamples/Axioms.lean:47:0: 'CRRGCore.CertRoute.closes' depends on axioms: [propext, Quot.sound]
 info: CRRGExamples/Axioms.lean:48:0: 'CRRGCore.CertRoute.refuted' depends on axioms: [propext, Quot.sound]
-✔ [13/22] Built CRRGExamples.NoMeta (256ms)
-✔ [14/22] Built CRRGExamples.Basic (369ms)
-✔ [15/22] Built CRRGExamples.CruxFamily (690ms)
-✔ [16/22] Built CRRGExamples.Negatives (428ms)
-✔ [17/22] Built CRRGExamples.FamilyDemoJson (180ms)
-✔ [18/22] Built CRRGExamples.FamilyAgreement (222ms)
-✔ [19/22] Built CRRGExamples.Lineage (6.9s)
-ℹ [20/22] Built CRRGExamples.Audit (7.1s)
+info: CRRGExamples/Axioms.lean:50:0: 'CRRGCore.guardedChain' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:51:0: 'CRRGCore.guardedChain_two' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:52:0: 'CRRGCore.guardedComp_irredundant' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:53:0: 'CRRGCore.guardedChain_irredundant' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:55:0: 'CRRGCore.State.initial_clean' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:56:0: 'CRRGCore.State.advance_conflicts' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:57:0: 'CRRGCore.State.advance_clean' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:58:0: 'CRRGCore.State.run_conflicts_mono' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:59:0: 'CRRGCore.State.run_clean' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:60:0: 'CRRGCore.State.run_no_readmission' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:61:0: 'CRRGCore.State.run_conflict_refuted' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:63:0: 'CRRGCore.State.selfMove_commit' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:64:0: 'CRRGCore.State.infinite_uncredited' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:66:0: 'CRRGCore.Arith.Formula.check_iff' depends on axioms: [propext]
+info: CRRGExamples/Axioms.lean:67:0: 'CRRGCore.Arith.Formula.mechCert' depends on axioms: [propext]
+info: CRRGExamples/Axioms.lean:69:0: 'CRRGCore.Gate.step_refines' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:70:0: 'CRRGCore.Gate.refines' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:71:0: 'CRRGCore.Gate.no_infinite_credits' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:72:0: 'CRRGCore.Gate.appended_event_sound' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:73:0: 'CRRGCore.Gate.run_journal_ok' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:74:0: 'CRRGCore.Gate.journal_ids_unique' depends on axioms: [propext, Quot.sound]
+info: CRRGExamples/Axioms.lean:75:0: 'CRRGCore.Gate.fair_extension' depends on axioms: [propext, Quot.sound]
+✔ [15/25] Built CRRGExamples.NoMeta (233ms)
+✔ [16/25] Built CRRGExamples.Lane (379ms)
+✔ [17/25] Built CRRGExamples.CruxFamily (855ms)
+✔ [18/25] Built CRRGExamples.Negatives (568ms)
+✔ [19/25] Built CRRGExamples.FamilyDemoJson (185ms)
+✔ [20/25] Built CRRGExamples.FamilyAgreement (225ms)
+ℹ [21/25] Built CRRGExamples.CoreAxiomAudit (3.4s)
+info: CRRGExamples/CoreAxiomAudit.lean:16:0: CORE AXIOM AUDIT: 984 constants in 7 modules with root CRRGCore; every one depends only on propext and Quot.sound (none on Classical.choice)
+✔ [22/25] Built CRRGExamples.Lineage (7.6s)
+ℹ [23/25] Built CRRGExamples.Audit (7.2s)
 info: CRRGExamples/Audit.lean:20:0: crrg mechanical certificate audited: CRRGExamples.evenCert, axioms []
 info: CRRGExamples/Audit.lean:44:0: crrg restatement detected (D1): CRRGExamples.ListBound ≡ CRRGExamples.ClassCap
 info: CRRGExamples/Audit.lean:52:0: crrg seal CRRGExamples.ListBound: 6040959509963729131 (closure of 1 declarations)
@@ -81,8 +107,8 @@ info: CRRGExamples/Audit.lean:92:0: crrg definitions agree (R1): CRRGExamples.Le
 info: CRRGExamples/Audit.lean:109:0: crrg lineage ok: no constant outside CRRGCore references a private core name
 info: CRRGExamples/Audit.lean:132:0: crrg admission: D1 clean (1 fresh claims)
 info: CRRGExamples/Audit.lean:140:0: crrg admission: D1 clean; reuse keys for definitionally equal fresh claims: [0, 2]
-✔ [21/22] Built CRRGExamples (637ms)
-Build completed successfully (22 jobs).
+✔ [24/25] Built CRRGExamples (579ms)
+Build completed successfully (25 jobs).
 exit: 0
 
 ## seal probes (probes/seal/run.sh): each before/after pair must differ
@@ -95,11 +121,12 @@ exit: 0
 exit: 0
 
 ## summary
-headline declarations with #print axioms: 37
+headline declarations with #print axioms: 59
 of which depend on Classical.choice: 0
 axiom sets in the report: [propext, Quot.sound] [propext] plus 9 declarations with no axioms
+whole-library axiom audit (CRRGExamples/CoreAxiomAudit.lean): CORE AXIOM AUDIT: 984 constants in 7 modules with root CRRGCore; every one depends only on propext and Quot.sound (none on Classical.choice)
 'sorry' in CRRGCore sources: 0
 'import Lean' in the certified library (CRRGCore.lean, CRRGCore/*.lean):        0
-imports of CRRGCore modules: import CRRGCore.Basic import CRRGCore.Easier import CRRGCore.Guarded import CRRGCore.Route import CRRGCore.State 
-#guard_msgs negative controls in CRRGExamples: CRRGExamples/Audit.lean:9 CRRGExamples/Axioms.lean:0 CRRGExamples/Basic.lean:0 CRRGExamples/CruxFamily.lean:0 CRRGExamples/FamilyAgreement.lean:0 CRRGExamples/FamilyDemoJson.lean:0 CRRGExamples/Lane.lean:0 CRRGExamples/Lineage.lean:1 CRRGExamples/Negatives.lean:0 CRRGExamples/NoMeta.lean:1 
+imports of CRRGCore modules: import CRRGCore.Arith import CRRGCore.Basic import CRRGCore.Easier import CRRGCore.Gate import CRRGCore.Guarded import CRRGCore.Route import CRRGCore.State 
+#guard_msgs negative controls in CRRGExamples: CRRGExamples/Audit.lean:9 CRRGExamples/Axioms.lean:0 CRRGExamples/Basic.lean:0 CRRGExamples/CoreAxiomAudit.lean:0 CRRGExamples/CruxFamily.lean:0 CRRGExamples/FamilyAgreement.lean:0 CRRGExamples/FamilyDemoJson.lean:0 CRRGExamples/Lane.lean:0 CRRGExamples/Lineage.lean:1 CRRGExamples/Negatives.lean:0 CRRGExamples/NoMeta.lean:1 
 'sorry' in CRRGExamples sources: only inside the two #guard_msgs negative controls of Audit.lean (forged-state attempts that must FAIL to elaborate; nothing containing sorry enters the environment): CRRGExamples/Audit.lean:98 CRRGExamples/Audit.lean:104 CRRGExamples/Audit.lean:105 
