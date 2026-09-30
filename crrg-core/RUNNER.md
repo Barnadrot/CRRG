@@ -98,7 +98,8 @@ correct. The trusted code is `CRRGCore`, `CRRGTools` and `runner/crrg_runner.py`
   - The lint is a text check, argued complete for Lean v4.30.0's meta surface listed above. It is not
     proved.
   - Each Lean-side check runs on the kernel's terms.
-  - There is no Abadi–Lamport refinement proof of the runner and gate loop.
+  - There is no Abadi–Lamport refinement proof of the runner and gate loop. A designed model of the gate has one
+    (`CRRGCore/Gate.lean`, v0.12.0); it says nothing about this runner or the deployed gate.
 - **Judgement.** Whether a statement means what the mathematics means, and whether a move is useful, stay
   judgement (CRRG Spec §10).
 - **Resources.** Each Lean call has a 600-second timeout (`TIMEOUT`). Submitted code runs only as elaboration

@@ -215,6 +215,69 @@ the staged implementation plan (§15). Do not reconcile the two.
 
 ## 2. Change log
 
+### v0.12.0 (2026-09-30)
+
+#### `CHG-47` — v0.12.0: results left on paper in v0.11, now in Lean
+
+v0.11 left several results about CRRG as arguments on paper. This release proves them in Lean, and adds a model of
+the gate. Every change is an addition: no existing definition or theorem statement changed, and the v0.11.1 headline
+axiom reports print exactly as before. The new results are 100 theorems and 53 definitions, in 1,454 lines of Lean.
+Both packages build from clean with `leanprover/lean4:v4.30.0`; Mathlib stays at `c5ea00351c`.
+
+`crrg-core` (Lean core only, no Mathlib):
+- **Learned conflicts persist.** Along every run, steps where nothing changes included, learned conflicts only grow and
+  stay refuted. The frontier meets them only as `[0]` under a refuted root. No commit re-admits an earlier conflict
+  (`State.Clean`, `run_clean`, `run_conflicts_mono`, `run_no_readmission`, `run_conflict_refuted`).
+- **Uncredited work can go on forever.** From a clean state whose root is not refuted and whose frontier is not empty,
+  replacing a leaf by itself is accepted without credit, and can be repeated forever (`selfMove_commit`,
+  `infinite_uncredited`). That the runner also admits such a move is not proved.
+- **Guarded chains.** `guardedChain` splits a goal along a chain of guarded edges; for two edges it equals
+  `guardedComp`. No child of either can be dropped (`guardedChain_irredundant`, `guardedComp_irredundant`).
+- **Closed integer arithmetic by reflection.** `Arith.Formula.check_iff` and the certificate `Formula.mechCert` settle
+  closed formulas over integer literals. This is not quantified arithmetic.
+- **A designed gate model** (`CRRGCore/Gate.lean`). Every behaviour of the model projects to a run of the certified
+  state and earns finitely many credits. It keeps an append-only journal with ids 0, 1, 2, … and a sound outcome for
+  each entry. Every finite behaviour extends to one in which every queued proposal is judged. **This is a model, not
+  the gate.** It proves nothing about the deployed gate: not how its stored state changes, not checkpoint integrity,
+  not the binding of seals to exact types.
+- **A new example**, `ClosureRecord` (example 16). Closing a leaf is accepted without credit while the record lags.
+  Closing the last leaf is credited only when the move carries the certificate `DMLt [] record`.
+- **A whole-library axiom audit** (`CRRGExamples/CoreAxiomAudit.lean`, run by `build.sh`): all 984 constants of the
+  certified library, private and generated ones included, use only `propext` and `Quot.sound`. The build fails if one
+  does not. The headline report grows from 37 to 59 declarations.
+- **`build.sh` pins the toolchain** (`ELAN_TOOLCHAIN` from `lean-toolchain`), because the runner compiles submissions
+  in temporary directories where elan would otherwise use the machine's default toolchain. The runner suite passes
+  47/47 (45 cases). The top-level README's "42/42 (40 cases)" was already out of date for v0.11.1 and is corrected.
+
+`crrg-classical` (Mathlib):
+- **Cancellation and a computed checker.** Removing a common part keeps the Dershowitz–Manna order, in both
+  directions. A multiset is below a single label iff each of its elements is. `dmCheck new record = true ↔ DMLt new
+  record`, and `withComputedCert` attaches a kernel-checked certificate: a move that carries it is credited exactly
+  when its new labels are below the record.
+- **Credited labels stay below the root's label.** With an unmeasured root, the first credit closes the root and is the
+  last (`record_le_root`, `credited_le_root`, `top_root_credit`, `creditOf_top_iff`).
+- **Stalls, with pauses and faithful logs.** A run earns finitely many credits even when it pauses
+  (`no_infinite_credits_stutter`). A lane whose outcomes are recorded faithfully either parks or keeps learning
+  genuinely new conflicts (`dichotomy`, meaningful for `k ≥ 1`). In the gate model, each lane's entries, enumerated in
+  order, form such a log (`gate_lane_dichotomy`, for the model only).
+- **A finite region model** (`RegionProgress.lean`). A fixed finite root region is split into disjoint regions. The
+  root holds iff every open region's obligation holds; a counterexample in an open region refutes the root. At most
+  2|R₀| − 1 splits and closes can happen, and none for an empty root. Weighted open mass is kept by splits and cut by
+  closes. The ambient type needs only decidable equality. This is a separate model, not connected to the certified
+  state.
+- The axiom report grows from 42 to 64 declarations, all within `[propext, Classical.choice, Quot.sound]`.
+
+Not in this release:
+- **An LRAT route to certified negatives was tried and not obtained.** Checking even a two-clause certificate by kernel
+  reduction hit Lean's recursion limit, and the default `bv_decide` path needs a native axiom that the axiom policy
+  rejects. No LRAT code is included. This is a failed attempt, not a proof that no such route exists. Lean's LRAT
+  soundness theorem itself uses `Classical.choice`, so such a route would belong in crrg-classical.
+- A proof-cost interface for "essential progress" was not started.
+
+The work was specified by a GPT-6.1 Sol research seat and proved by a GPT-6 Astra seat. An independent review of
+every new statement (Claude, Opus 5.5) found each faithful to its intended statement (seven are stronger than
+requested), with every hypothesis satisfiable.
+
 ### v0.11.1 (2026-09-29)
 
 #### `CHG-46` — v0.11.1: corrections after an independent audit
