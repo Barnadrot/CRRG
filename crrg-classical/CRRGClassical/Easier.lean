@@ -287,4 +287,74 @@ theorem core_no_infinite_credits_classical {root : Goal} (s : ℕ → State root
   obtain ⟨j, hij, m, hm⟩ := hinf i
   exact ⟨j, hij, core_commit_classical _ _ m hm⟩
 
+/-! ## L-02. Cancellation and comparison with a singleton -/
+
+/-- Cancel one occurrence shared by both sides of a DM comparison. -/
+theorem dm_cons_cancel (a : Label) (A B : Multiset Label) :
+    IsDershowitzMannaLT (a ::ₘ A) (a ::ₘ B) ↔ IsDershowitzMannaLT A B := by
+  constructor
+  · rintro ⟨X, Y, Z, hZ, hA, hB, hYZ⟩
+    by_cases haX : a ∈ X
+    · refine ⟨X.erase a, Y, Z, hZ, ?_, ?_, hYZ⟩
+      · simpa only [erase_cons_head, erase_add_left_pos _ haX] using
+          congrArg (fun S : Multiset Label => S.erase a) hA
+      · simpa only [erase_cons_head, erase_add_left_pos _ haX] using
+          congrArg (fun S : Multiset Label => S.erase a) hB
+    · have haY : a ∈ Y := by
+        have : a ∈ X + Y := hA ▸ mem_cons_self a A
+        exact (mem_add.mp this).resolve_left haX
+      have haZ : a ∈ Z := by
+        have : a ∈ X + Z := hB ▸ mem_cons_self a B
+        exact (mem_add.mp this).resolve_left haX
+      obtain ⟨z₀, hz₀, haz₀⟩ := hYZ a haY
+      have hne : z₀ ≠ a := by
+        intro h; subst z₀; exact Label.lt_irrefl' a haz₀
+      have hz₀' : z₀ ∈ Z.erase a := (mem_erase_of_ne hne).mpr hz₀
+      refine ⟨X, Y.erase a, Z.erase a, ?_, ?_, ?_, ?_⟩
+      · intro h; simp [h] at hz₀'
+      · simpa only [erase_cons_head, erase_add_right_pos _ haY] using
+          congrArg (fun S : Multiset Label => S.erase a) hA
+      · simpa only [erase_cons_head, erase_add_right_pos _ haZ] using
+          congrArg (fun S : Multiset Label => S.erase a) hB
+      · intro y hy
+        obtain ⟨z, hz, hyz⟩ := hYZ y (mem_of_mem_erase hy)
+        by_cases hza : z = a
+        · subst z
+          exact ⟨z₀, hz₀', Label.lt_trans' hyz haz₀⟩
+        · exact ⟨z, (mem_erase_of_ne hza).mpr hz, hyz⟩
+  · rintro ⟨X, Y, Z, hZ, rfl, rfl, hYZ⟩
+    exact ⟨a ::ₘ X, Y, Z, hZ, by simp, by simp, hYZ⟩
+
+/-- An aligned common multiset can be cancelled, preserving strict DM order. -/
+theorem dm_add_cancel (A B M : Multiset Label) :
+    IsDershowitzMannaLT (A + M) (B + M) ↔ IsDershowitzMannaLT A B := by
+  induction M using Multiset.induction_on with
+  | empty => simp
+  | cons a M ih => simpa only [add_cons, dm_cons_cancel] using ih
+
+/-- A multiset is below a singleton exactly when each element is below its label. -/
+theorem dm_singleton_iff (C : Multiset Label) (x : Label) :
+    IsDershowitzMannaLT C {x} ↔ ∀ c ∈ C, Label.lt c x := by
+  constructor
+  · rintro ⟨X, Y, Z, hZ, hC, hx, hYZ⟩
+    have hcard := congrArg Multiset.card hx
+    simp only [card_singleton, card_add] at hcard
+    have hpos : 0 < Z.card := card_pos.mpr hZ
+    have hX : X = 0 := card_eq_zero.mp (by omega)
+    subst X
+    simp only [zero_add] at hC hx
+    intro c hc
+    obtain ⟨z, hz, hcz⟩ := hYZ c (hC ▸ hc)
+    have hzx : z = x := mem_singleton.mp (hx.symm ▸ hz)
+    subst z
+    exact hcz
+  · intro h
+    exact ⟨0, C, {x}, by simp, by simp, by simp,
+      fun c hc => ⟨x, mem_singleton_self x, h c hc⟩⟩
+
+/-- The aligned frontier criterion obtained by cancelling its unchanged part. -/
+theorem dm_aligned_singleton_iff (C M : Multiset Label) (x : Label) :
+    IsDershowitzMannaLT (C + M) ({x} + M) ↔ ∀ c ∈ C, Label.lt c x := by
+  rw [dm_add_cancel, dm_singleton_iff]
+
 end CRRGClassical

@@ -3,6 +3,8 @@ import CRRGCore.Easier
 import CRRGCore.Guarded
 import CRRGCore.State
 import CRRGCore.Route
+import CRRGCore.Gate
+import CRRGCore.Arith
 
 /-!
 # CRRGCore — a closed CRRG core (Phase 0)

@@ -806,6 +806,237 @@ theorem no_infinite_credits :
       · exact Relation.TransGen.trans hdrop h
   exact key _ (DMLt.wf.apply _) 0 rfl
 
+/-! ## Part 2, M2: conflict persistence, including stutters -/
+
+/-- The only permitted intersection of frontier and conflicts is the refuted root fallback. -/
+def Clean (S : State root) : Prop :=
+  (∀ k ∈ S.leaves, k ∉ S.conflicts) ∨ (S.leaves = [0] ∧ 0 ∈ S.conflicts)
+
+/-- A run step may be an admitted state change or a stutter. -/
+def Next (S S' : State root) : Prop := Advance S S' ∨ S' = S
+
+theorem initial_clean (fams : List Family) (l : Label) (hl : LabelOK fams root l) :
+    (initial root fams l hl).Clean := by
+  left
+  simp [initial]
+
+theorem commit_conflicts (S S' : State root) (m : Move S) (t : Tag)
+    (h : commit S m = .ok (S', t)) : S'.conflicts = S.conflicts := by
+  unfold commit at h
+  split at h
+  · cases h
+  split at h
+  · split at h
+    · cases h
+    · cases h; rfl
+  · cases h
+
+theorem commit_clean (S S' : State root) (m : Move S) (t : Tag)
+    (h : commit S m = .ok (S', t)) (hS : S.Clean) : S'.Clean := by
+  rcases hS with hS | ⟨_, h0⟩
+  · have hchildren := commit_no_conflict S S' m t h
+    unfold commit at h
+    split at h
+    · cases h
+    split at h
+    · split at h
+      · cases h
+      · cases h
+        left
+        intro k hk
+        change k ∉ S.conflicts
+        rcases mem_replaceList hk with hk | hk | hk
+        · exact hchildren k hk
+        · exact hS k (List.mem_of_mem_take hk)
+        · exact hS k (List.mem_of_mem_drop hk)
+    · cases h
+  · have hr : S.rootRefuted = true := by simp [rootRefuted, h0]
+    rw [commit_rootRefuted S m hr] at h
+    cases h
+
+theorem backtrackTarget_clean (conflicts : List Nat) (history : List (List Nat)) :
+    (∀ k ∈ backtrackTarget conflicts history, k ∉ conflicts) ∨
+      (backtrackTarget conflicts history = [0] ∧ 0 ∈ conflicts) := by
+  unfold backtrackTarget
+  split
+  · rename_i l hl
+    left
+    have hall := List.find?_some hl
+    intro k hk
+    have h := List.all_eq_true.mp hall k hk
+    simpa using h
+  · by_cases h0 : 0 ∈ conflicts
+    · exact .inr ⟨rfl, h0⟩
+    · left; simpa using h0
+
+theorem advance_conflicts {S S' : State root} (h : Advance S S') :
+    ∀ k ∈ S.conflicts, k ∈ S'.conflicts := by
+  cases h with
+  | commit m t S' hc => rw [commit_conflicts S S' m t hc]; exact fun _ hk => hk
+  | refute i h => exact fun k hk => List.mem_cons_of_mem _ hk
+  | learn k' hk' k hk imp => exact fun j hj => List.mem_cons_of_mem _ hj
+
+theorem advance_clean {S S' : State root} (h : Advance S S') (hS : S.Clean) : S'.Clean := by
+  have hneg (k : Nat) (hk : k < S.reg.length) (hn : ¬ holds S.reg k) :
+      (withConflict S k hk hn).Clean := by
+    unfold Clean withConflict
+    dsimp
+    split
+    · exact backtrackTarget_clean _ _
+    · rename_i hnone
+      left
+      intro j hj hc
+      have : S.leaves.any (fun j => (k :: S.conflicts).contains j) = true :=
+        List.any_eq_true.mpr ⟨j, hj, by simpa using hc⟩
+      exact hnone this
+  cases h with
+  | commit m t S' hc => exact commit_clean S S' m t hc hS
+  | refute i h => exact hneg _ _ _
+  | learn k' hk' k hk imp => exact hneg _ _ _
+
+theorem next_conflicts {S S' : State root} (h : Next S S') :
+    ∀ k ∈ S.conflicts, k ∈ S'.conflicts := by
+  rcases h with h | rfl
+  · exact advance_conflicts h
+  · exact fun _ hk => hk
+
+theorem next_clean {S S' : State root} (h : Next S S') (hS : S.Clean) : S'.Clean := by
+  rcases h with h | rfl
+  · exact advance_clean h hS
+  · exact hS
+
+theorem run_conflicts_mono (s : Nat → State root)
+    (hs : ∀ i, Advance (s i) (s (i + 1)) ∨ s (i + 1) = s i)
+    {i j : Nat} (hij : i ≤ j) : ∀ k ∈ (s i).conflicts, k ∈ (s j).conflicts := by
+  induction j with
+  | zero =>
+    have : i = 0 := by omega
+    subst i
+    exact fun _ hk => hk
+  | succ j ih =>
+    by_cases hij' : i ≤ j
+    · exact fun k hk => next_conflicts (hs j) k (ih hij' k hk)
+    · have : i = j + 1 := by omega
+      subst i
+      exact fun _ hk => hk
+
+theorem run_clean (s : Nat → State root)
+    (hs : ∀ i, Advance (s i) (s (i + 1)) ∨ s (i + 1) = s i)
+    (h0 : (s 0).Clean) : ∀ i, (s i).Clean := by
+  intro i
+  induction i with
+  | zero => exact h0
+  | succ i ih => exact next_clean (hs i) ih
+
+theorem run_no_readmission (s : Nat → State root)
+    (hs : ∀ i, Advance (s i) (s (i + 1)) ∨ s (i + 1) = s i)
+    {i j : Nat} (hij : i ≤ j) (m : Move (s j)) (t : Tag)
+    (hm : commit (s j) m = .ok (s (j + 1), t)) :
+    ∀ k ∈ (resolve (s j).reg m.children).2, k ∉ (s i).conflicts := by
+  intro k hk hconf
+  exact commit_no_conflict (s j) (s (j + 1)) m t hm k hk
+    (run_conflicts_mono s hs hij k hconf)
+
+/-- Every previously learned key remains certified false in the current registry. -/
+theorem run_conflict_refuted (s : Nat → State root)
+    (hs : ∀ i, Advance (s i) (s (i + 1)) ∨ s (i + 1) = s i)
+    {i j : Nat} (hij : i ≤ j) {k : Nat} (hk : k ∈ (s i).conflicts) :
+    ¬ holds (s j).reg k :=
+  (s j).conflicts_sound k (run_conflicts_mono s hs hij k hk)
+
+/-! ## Part 3, M4: repeatable accepted self-moves -/
+
+def selfMove (S : State root) (i : Fin S.leaves.length) : Move S where
+  pos := i
+  children := [.old S.leaves[i]]
+  cover h := (holds_iff (S.leaves_valid _ (List.getElem_mem _))).mp
+    (h (.old S.leaves[i]) (List.mem_singleton.mpr rfl))
+
+/-! ## Part 4: constructive list reconstruction and the M4 retry -/
+
+universe u
+
+theorem take_self_drop {α : Type u} (l : List α) (i : Fin l.length) :
+    l.take i.val ++ l[i] :: l.drop (i.val + 1) = l := by
+  change l.take i.val ++ l[i.val] :: l.drop (i.val + 1) = l
+  rw [List.getElem_cons_drop i.isLt, List.take_append_drop]
+
+theorem selfMove_local_false (S : State root) (i : Fin S.leaves.length) :
+    S.localEasier (selfMove S i) = false := by
+  change ((labelOf S.reg S.leaves[i]).ltb (labelOf S.reg S.leaves[i]) && true) = false
+  cases labelOf S.reg S.leaves[i] <;> simp [Label.ltb]
+
+theorem selfMove_valid (S : State root) (i : Fin S.leaves.length) :
+    (selfMove S i).children.all (fun c => c.valid S.reg) = true := by
+  change (decide (S.leaves[i.val] < S.reg.length) && true) = true
+  have hk : decide (S.leaves[i.val] < S.reg.length) = true :=
+    decide_eq_true (S.leaves_valid _ (List.getElem_mem i.isLt))
+  exact congrArg (fun b : Bool => b && true) hk
+
+theorem selfMove_credit (S : State root) (i : Fin S.leaves.length) :
+    S.creditOf (selfMove S i) = .notCertifiedEasier := by
+  unfold creditOf
+  rw [selfMove_local_false]
+  rfl
+
+theorem selfMove_commit (S : State root) (hS : S.Clean) (h0 : 0 ∉ S.conflicts)
+    (i : Fin S.leaves.length) :
+    ∃ S', commit S (selfMove S i) = .ok (S', .notCertifiedEasier) ∧
+      S'.leaves = S.leaves ∧ S'.conflicts = S.conflicts := by
+  have hk : S.leaves[i.val] ∉ S.conflicts := by
+    rcases hS with hS | ⟨_, hbad⟩
+    · exact hS _ (List.getElem_mem i.isLt)
+    · exact (h0 hbad).elim
+  have hr : S.rootRefuted = false := by simpa [rootRefuted] using h0
+  have hv := selfMove_valid S i
+  have hf : firstConflict S.conflicts (resolve S.reg (selfMove S i).children).2 = none := by
+    simp [selfMove, resolve, firstConflict, hk]
+  refine ⟨applyMove S (selfMove S i) (fun c hc => List.all_eq_true.mp hv c hc), ?_, ?_, rfl⟩
+  · simp only [commit, hr, Bool.false_eq_true, if_false, dif_pos hv, selfMove_credit]
+    split
+    · rename_i k hsome
+      have : none = some k := hf.symm.trans hsome
+      cases this
+    · rfl
+  · change replaceList S.leaves i [S.leaves[i]] = S.leaves
+    unfold replaceList
+    rw [List.append_assoc, List.singleton_append]
+    exact take_self_drop S.leaves i
+
+/-- Computed successor from the existing commit API; rejection leaves the state unchanged. -/
+def selfNext (S : State root) (i : Fin S.leaves.length) : State root :=
+  match commit S (selfMove S i) with
+  | .ok (S', _) => S'
+  | .error _ => S
+
+theorem selfNext_spec (S : State root) (hS : S.Clean) (h0 : 0 ∉ S.conflicts)
+    (i : Fin S.leaves.length) :
+    commit S (selfMove S i) = .ok (selfNext S i, .notCertifiedEasier) ∧
+      (selfNext S i).leaves = S.leaves ∧ (selfNext S i).conflicts = S.conflicts := by
+  obtain ⟨T, hc, hl, hk⟩ := selfMove_commit S hS h0 i
+  have hn : selfNext S i = T := by simp only [selfNext, hc]
+  rw [hn]
+  exact ⟨hc, hl, hk⟩
+
+theorem infinite_uncredited (S : State root) (hS : S.Clean) (h0 : 0 ∉ S.conflicts)
+    (hne : S.leaves ≠ []) :
+    ∃ s : Nat → State root, s 0 = S ∧
+      ∀ n, ∃ m : Move (s n), commit (s n) m = .ok (s (n + 1), .notCertifiedEasier) := by
+  let Good := { T : State root // T.Clean ∧ 0 ∉ T.conflicts ∧ T.leaves ≠ [] }
+  let pos (q : Good) : Fin q.val.leaves.length := ⟨0, List.length_pos_iff.mpr q.property.2.2⟩
+  let next (q : Good) : Good :=
+    let hs := selfNext_spec q.val q.property.1 q.property.2.1 (pos q)
+    ⟨selfNext q.val (pos q),
+      advance_clean (.commit (selfMove q.val (pos q)) _ _ hs.1) q.property.1,
+      by rw [hs.2.2]; exact q.property.2.1,
+      by rw [hs.2.1]; exact q.property.2.2⟩
+  let seq : Nat → Good := fun n => Nat.rec ⟨S, hS, h0, hne⟩ (fun _ q => next q) n
+  refine ⟨fun n => (seq n).val, rfl, ?_⟩
+  intro n
+  exact ⟨selfMove (seq n).val (pos (seq n)),
+    (selfNext_spec (seq n).val (seq n).property.1 (seq n).property.2.1 (pos (seq n))).1⟩
+
+
 end State
 
 /-! ## Convenience constructors for moves -/
