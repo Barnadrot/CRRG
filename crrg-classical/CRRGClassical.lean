@@ -1,4 +1,6 @@
 import CRRGClassical.Easier
+import CRRGClassical.DMCheck
+import CRRGClassical.RegionProgress
 import CRRGClassical.State
 import CRRGClassical.Family
 import CRRGClassical.Route

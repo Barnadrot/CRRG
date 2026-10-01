@@ -304,4 +304,87 @@ example (P Q : Prop) (e : GuardedEdge ⟨P⟩ ⟨Q⟩ Gd) :
 
 end Guarded
 
+/-! ## L-01. Closure is accepted without necessarily lowering the credited record
+
+The owner pins a constant true claim with its Nat index as size. Grow the size-1
+root to two size-2 children, then close both. The final closure is credited only
+when supplied with the explicit record certificate in this lagging-record example.
+-/
+
+namespace ClosureRecord
+
+def family : Family where
+  Idx := Nat
+  claim _ := True
+  size n := n
+
+def families : List Family := [family]
+
+def entry (n : Nat) : Entry families :=
+  ⟨⟨True⟩, .sized 0 n, ⟨by decide, n, rfl, rfl⟩⟩
+
+def start : State ⟨True⟩ :=
+  State.initial ⟨True⟩ families (.sized 0 1) ⟨by decide, (1 : Nat), rfl, rfl⟩
+
+def grow : Move start where
+  pos := ⟨0, by decide⟩
+  children := [.new (entry 2), .new (entry 2)]
+  cover _ := True.intro
+
+def grown : State ⟨True⟩ := stateOr (State.commit start grow) start
+
+theorem initial_record : start.record = [.sized 0 1] := rfl
+
+theorem grow_accepted :
+    State.commit start grow = .ok (grown, .notCertifiedEasier) := rfl
+
+theorem grown_frontier_record :
+    grown.leafLabels = [.sized 0 2, .sized 0 2] ∧ grown.record = [.sized 0 1] :=
+  ⟨rfl, rfl⟩
+
+def closeOne : Move grown := Move.close grown ⟨0, by decide⟩ True.intro
+
+def oneLeft : State ⟨True⟩ := stateOr (State.commit grown closeOne) grown
+
+theorem close_one_accepted :
+    State.commit grown closeOne = .ok (oneLeft, .notCertifiedEasier) := rfl
+
+theorem close_one_frontier_record :
+    oneLeft.leafLabels = [.sized 0 2] ∧ oneLeft.record = [.sized 0 1] ∧
+      grown.localEasier closeOne = true ∧ oneLeft.easierCount = 0 :=
+  ⟨rfl, rfl, rfl, rfl⟩
+
+def closeLast : Move oneLeft := Move.close oneLeft ⟨0, by decide⟩ True.intro
+
+def closedWithoutCert : State ⟨True⟩ := stateOr (State.commit oneLeft closeLast) oneLeft
+
+theorem terminal_without_cert_accepted :
+    State.commit oneLeft closeLast = .ok (closedWithoutCert, .notCertifiedEasier) := rfl
+
+theorem terminal_without_cert_result :
+    closedWithoutCert.leaves = [] ∧ closedWithoutCert.leafLabels = [] ∧
+      closedWithoutCert.record = [.sized 0 1] ∧ closedWithoutCert.easierCount = 0 ∧
+      closeLast.recordCert = none :=
+  ⟨rfl, rfl, rfl, rfl, rfl⟩
+
+/-- Deleting the recorded singleton supplies the terminal gamma certificate. -/
+theorem empty_below_record : DMLt [] oneLeft.record := by
+  apply DMLt.of_step
+  exact ⟨0, by decide, [], by simp, rfl⟩
+
+def closeLastWithCert : Move oneLeft :=
+  { closeLast with recordCert := some ⟨empty_below_record⟩ }
+
+def closedWithCert : State ⟨True⟩ := stateOr (State.commit oneLeft closeLastWithCert) oneLeft
+
+theorem terminal_with_cert_accepted :
+    State.commit oneLeft closeLastWithCert = .ok (closedWithCert, .certifiedEasier) := rfl
+
+theorem terminal_with_cert_result :
+    closedWithCert.leaves = [] ∧ closedWithCert.leafLabels = [] ∧
+      closedWithCert.record = [] ∧ closedWithCert.easierCount = 1 :=
+  ⟨rfl, rfl, rfl, rfl⟩
+
+end ClosureRecord
+
 end CRRGExamples

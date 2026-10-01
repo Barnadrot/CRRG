@@ -2,6 +2,9 @@
 # Clean build of crrg-core and regeneration of BUILD.log. Requires lean/lake v4.30.0 on PATH.
 set -u
 cd "$(dirname "$0")"
+# Pin the toolchain for every lean/lake call, including the runner's, which compiles submissions in temporary
+# directories that have no lean-toolchain file (elan would otherwise pick the machine's default toolchain).
+export ELAN_TOOLCHAIN="$(cat lean-toolchain)"
 rm -rf .lake/build
 tmp=$(mktemp)
 {
@@ -33,6 +36,7 @@ tmp=$(mktemp)
   echo "headline declarations with #print axioms: $(grep -c 'depends on axioms\|does not depend on any axioms' "$tmp")"
   echo "of which depend on Classical.choice: $(grep 'depends on axioms' "$tmp" | grep -c 'Classical.choice')"
   echo "axiom sets in the report: $(grep 'depends on axioms' "$tmp" | grep -oE '\[[^]]*\]$' | sort -u | tr '\n' ' ')plus $(grep -c 'does not depend on any axioms' "$tmp") declarations with no axioms"
+  echo "whole-library axiom audit (CRRGExamples/CoreAxiomAudit.lean): $(grep -oE 'CORE AXIOM AUDIT: .*' "$tmp" | head -1)"
   echo "'sorry' in CRRGCore sources: $(cat CRRGCore/*.lean CRRGCore.lean | grep -c sorry)"
   echo "'import Lean' in the certified library (CRRGCore.lean, CRRGCore/*.lean): $(grep -l '^import Lean' CRRGCore.lean CRRGCore/*.lean | wc -l)"
   echo "imports of CRRGCore modules: $(grep -h '^import' CRRGCore.lean CRRGCore/*.lean | sort -u | tr '\n' ' ')"

@@ -177,4 +177,99 @@ def caseSplit (P : Goal) (c : Prop) [Decidable c] : Split P where
     · exact h1 hc
     · exact h2 hc
 
+/-! ## Part 3, M1: arbitrary guarded chains and irredundancy -/
+
+def guardedChain {n : Nat} (A : Fin (n + 1) → Goal) (g : Fin n → Prop)
+    [∀ i, Decidable (g i)]
+    (e : ∀ i : Fin n, GuardedEdge (A i.castSucc) (A i.succ) (g i)) : Split (A 0) where
+  children := ⟨(∀ i, g i) → (A (Fin.last n)).claim⟩ ::
+    List.ofFn fun j : Fin n => ⟨(∀ i, i < j → g i) ∧ ¬ g j → (A j.castSucc).claim⟩
+  discharge h := by
+    have pass : (∀ i, g i) → (A (Fin.last n)).claim := h _ (List.mem_cons_self ..)
+    have escape (j : Fin n) : (∀ i, i < j → g i) ∧ ¬ g j → (A j.castSucc).claim :=
+      h _ (List.mem_cons_of_mem _ (List.mem_ofFn.mpr ⟨j, rfl⟩))
+    have go (j : Fin (n + 1)) : (∀ i : Fin n, i.val < j.val → g i) → (A j).claim := by
+      induction j using Fin.reverseInduction with
+      | last => exact fun hp => pass (fun i => hp i i.isLt)
+      | cast j ih =>
+        intro hp
+        by_cases hg : g j
+        · apply (e j).onPass hg
+          apply ih
+          intro i hi
+          by_cases hij : i.val < j.val
+          · exact hp i hij
+          · have : i = j := Fin.ext (by change i.val < j.val + 1 at hi; omega)
+            subst i; exact hg
+        · exact escape j ⟨hp, hg⟩
+    exact go 0 (fun i hi => (Nat.not_lt_zero i.val hi).elim)
+
+theorem guardedChain_two {A : Fin 3 → Goal} {g : Fin 2 → Prop} [∀ i, Decidable (g i)]
+    (e : ∀ i : Fin 2, GuardedEdge (A i.castSucc) (A i.succ) (g i)) :
+    (guardedChain A g e).children = (guardedComp (e 0) (e 1)).children := by
+  simp [guardedChain, guardedComp, List.ofFn_succ, Fin.forall_fin_succ]
+
+universe u
+
+/-- Constructive membership witness for positional erasure. -/
+theorem eraseIdx_mem_index {α : Type u} {l : List α} {k : Nat} {x : α}
+    (h : x ∈ l.eraseIdx k) : ∃ i hi, i ≠ k ∧ l[i]'hi = x := by
+  induction l generalizing k with
+  | nil => cases h
+  | cons a l ih =>
+    cases k with
+    | zero =>
+      obtain ⟨i, hi, heq⟩ := List.mem_iff_getElem.mp h
+      exact ⟨i + 1, Nat.succ_lt_succ hi, by omega, heq⟩
+    | succ k =>
+      change x ∈ a :: l.eraseIdx k at h
+      rcases List.mem_cons.mp h with heq | htail
+      · exact ⟨0, Nat.zero_lt_succ _, by omega, heq.symm⟩
+      · obtain ⟨i, hi, hne, heq⟩ := ih htail
+        exact ⟨i + 1, Nat.succ_lt_succ hi, by omega, heq⟩
+
+theorem guardedChain_irredundant {n : Nat} (j : Fin (n + 1)) :
+    ¬ ∀ (A : Fin (n + 1) → Goal) (g : Fin n → Prop) [∀ i, Decidable (g i)]
+        (e : ∀ i : Fin n, GuardedEdge (A i.castSucc) (A i.succ) (g i)),
+        (∀ c ∈ (guardedChain A g e).children.eraseIdx j, c.claim) → (A 0).claim := by
+  intro hall
+  let A : Fin (n + 1) → Goal := fun _ => ⟨False⟩
+  let g : Fin n → Prop := fun i => j.val = 0 ∨ i.val + 1 < j.val
+  let e : ∀ i : Fin n, GuardedEdge (A i.castSucc) (A i.succ) (g i) :=
+    fun _ => ⟨fun _ h => h⟩
+  apply hall A g e
+  intro c hc
+  obtain ⟨k, hk, hkj, rfl⟩ := eraseIdx_mem_index hc
+  cases k with
+  | zero =>
+    change (∀ i, g i) → False
+    intro hg
+    let bad : Fin n := ⟨j.val - 1, by have := j.isLt; omega⟩
+    have hb := hg bad
+    dsimp [g, bad] at hb
+    omega
+  | succ k =>
+    have hk' : k < n := by simpa [guardedChain] using hk
+    simp only [guardedChain, List.getElem_cons_succ, List.getElem_ofFn]
+    change ((∀ i : Fin n, i < (⟨k, hk'⟩ : Fin n) → g i) ∧ ¬ g ⟨k, hk'⟩) → False
+    intro hp
+    have hn : ¬ (j.val = 0 ∨ k + 1 < j.val) := hp.2
+    let bad : Fin n := ⟨j.val - 1, by have := j.isLt; omega⟩
+    have hbad : bad < (⟨k, hk'⟩ : Fin n) := by
+      change j.val - 1 < k
+      omega
+    have hb := hp.1 bad hbad
+    dsimp [g, bad] at hb
+    omega
+
+theorem guardedComp_irredundant (j : Fin 3) :
+    ¬ ∀ (A B C : Goal) (g₁ g₂ : Prop) [Decidable g₁] [Decidable g₂]
+        (e₁ : GuardedEdge A B g₁) (e₂ : GuardedEdge B C g₂),
+        (∀ c ∈ (guardedComp e₁ e₂).children.eraseIdx j, c.claim) → A.claim := by
+  intro h
+  apply guardedChain_irredundant (n := 2) j
+  intro A g inst e hc
+  rw [guardedChain_two e] at hc
+  exact h (A 0) (A 1) (A 2) (g 0) (g 1) (e 0) (e 1) hc
+
 end CRRGCore

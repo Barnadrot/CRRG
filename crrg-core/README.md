@@ -14,11 +14,14 @@ a Lean theorem, G2 and G12 are partly closed, G13 is outside the core, and G14 w
   for the multiset lift.
 - **Build.** `./build.sh`, with `lean` and `lake` v4.30.0 and `python3` on PATH. It builds `CRRGCore`,
   `CRRGTools` and `CRRGExamples` from clean, runs the seal probes and the runner suite, and writes
-  `BUILD.log`. The runner calls `lean` from a temporary directory, so with elan and a different default
-  toolchain, set `ELAN_TOOLCHAIN=leanprover/lean4:v4.30.0` first.
+  `BUILD.log`. The runner calls `lean` from a temporary directory, so since v0.12.0 `build.sh` sets
+  `ELAN_TOOLCHAIN` from `lean-toolchain` itself; with elan, a different default toolchain no longer matters.
 - **Verified in `BUILD.log`.**
-  - 37 headline declarations are printed with `#print axioms`, and **none depends on `Classical.choice`**.
+  - 59 headline declarations are printed with `#print axioms`, and **none depends on `Classical.choice`**.
     The axioms used are only `propext` and `Quot.sound`.
+  - A whole-library audit (`CRRGExamples/CoreAxiomAudit.lean`, since v0.12.0) checks **every** constant of the
+    `CRRGCore` modules, 984 of them including private and generated ones: each uses only `propext` and
+    `Quot.sound`. The build fails if one does not.
   - There is **no `sorry`** in `CRRGCore`.
   - The certified library (`CRRGCore`) does not import `Lean` (the meta framework); its only imports are
     its own modules.
@@ -36,8 +39,10 @@ The map from item to fix and probe is in `STATUS.md`.
 | `CRRGCore/Guarded.lean` | guarded composition, escapes, no hidden composition debt, edge leaves, partition moves | Basic |
 | `CRRGCore/State.lean` | the committed research state: registry, commit, conflicts, refute, learn, backtrack, easier accounting | Basic, Easier, Guarded |
 | `CRRGCore/Route.lean` | the route's root is the capstone | State |
+| `CRRGCore/Gate.lean` | a **designed** gate model: stored state, proposal queue, working state and an append-only attempt journal; refinement to runs of the certified state, finite credit, sound journal entries with unique ids, fair extension. It is a model of the gate, not the gate or the runner (v0.12.0) | State |
+| `CRRGCore/Arith.lean` | reflection for closed integer arithmetic (literals, `+`, `*`, `%`; `=`, `<`, `≤`; `∧`, `∨`, `¬`) and its two-way certificate `Formula.mechCert` (v0.12.0) | Easier |
 | `CRRGTools/Seal.lean` | **runner tools** over kernel terms: declaration seals, D1 (`#crrg_same_meaning`, `#crrg_admit`), the lineage audit, R1 on definitions, the informational rung-2 audit | `Lean`, CRRGCore |
-| `CRRGExamples/*.lean` | the required examples and the negative controls (`#guard_msgs`), plus the axiom report | CRRGCore (and CRRGTools for Audit and Lineage) |
+| `CRRGExamples/*.lean` | the required examples and the negative controls (`#guard_msgs`), plus the axiom report and the whole-library axiom audit | CRRGCore (and CRRGTools for Audit and Lineage; `Lean` for the axiom audit) |
 | `CRRGTools/Runner.lean` | runner-side checks: axioms per module, R1 from a move's fresh claims or named lemmas, the commit summary | CRRGTools.Seal |
 | `runner/` | **the gate runner** (`crrg_runner.py`, one JSON verdict) and its negative-control suite (`tests/`, `run_tests.py`); see `RUNNER.md` | Python, Lean |
 | `probes/seal/` | before/after file pairs whose seals must differ, run by `build.sh` | CRRGTools |
@@ -87,6 +92,8 @@ implements all of them, and a negative-control suite tests them (`RUNNER.md`).
 | `State.commit_rootRefuted` (State) | once the root is a learned conflict, **every** commit is rejected (`Reject.rootRefuted`) | a dead route admits nothing |
 | `State.learn` (State) | propagates a conflict along a supplied implication, so a restatement under a new key is refuted too | G5, G12 |
 | `State.commit_no_conflict` (State) | an accepted commit never admits a learned conflict | "a restatement cannot re-admit it" |
+| `State.Clean`, `initial_clean`, `advance_clean`, `run_clean` (State, v0.12.0) | the frontier meets the learned conflicts only as `[0]` under a refuted root: at `initial`, and along every run, steps where nothing changes included | G5 |
+| `advance_conflicts`, `run_conflicts_mono`, `run_conflict_refuted`, `run_no_readmission` (State, v0.12.0) | along every run, learned conflicts only grow and stay refuted, and no later commit re-admits an earlier conflict key | G5 |
 
 ### Foundation 2: refinement mappings
 
@@ -100,6 +107,10 @@ implements all of them, and a negative-control suite tests them (`RUNNER.md`).
 | `#crrg_check_defs` + `@[crrg_agree]` (CRRGTools) | R1 on definitions: every non-core definition a leaf uses is sealed, or has a **typed, directed** agreement lemma `∀ xs, D xs ↔ S …`, `∀ xs, S … ↔ D xs` or `∀ xs, D xs → S …`, with `D` applied to distinct bound variables and no other hypothesis (v0.11.1; v0.11.0 accepted agreements behind a discarded premise); co-occurrence does not count | R1 on definitions |
 | `#crrg_check_lineage` (CRRGTools) | no constant outside `CRRGCore` mentions a private core name | G1 against metaprogramming |
 | `WitnessMap.toEdge` (Guarded) | a counterexample map is R2 between zero-step specifications | kept |
+| `Gate`, `Gate.Step`, `Gate.Init`, `Gate.step_refines`, `Gate.refines` (Gate, v0.12.0) | **model only**: every behaviour of the designed gate model from `Init` projects to a run of `State`, steps where nothing changes included | refinement for the designed model |
+| `Gate.no_infinite_credits` (Gate, v0.12.0) | **model only**: no behaviour of the model earns infinitely many credits | finite credit, model |
+| `Gate.step_journal`, `Gate.appended_event_sound`, `Gate.run_journal_ok`, `Gate.journal_ids_unique` (Gate, v0.12.0) | **model only**: each step keeps the journal or appends one entry whose outcome is sound for that step; ids run 0, 1, 2, … from an empty journal | an attempt journal, model |
+| `Gate.Judges`, `Gate.fair_extension` (Gate, v0.12.0) | **model only**: every finite behaviour of the model extends to an infinite one in which every queued proposal is judged (proposals are compared by value) | fairness, model |
 
 ### Foundation 3: guarded composition (CWSS, ArkLib's guarded CWSS)
 
@@ -111,6 +122,8 @@ implements all of them, and a negative-control suite tests them (`RUNNER.md`).
 | `conditionalSplit` (Guarded) | a conditional result enters only as a split whose premises are open leaves | no hidden composition debt |
 | `hidden_debt_not_edge` (Guarded) | `¬ ∀ A B P, (A ∧ B → P) → Edge P B`: refining P into B has no witness | the two-pager's rejected refinement |
 | `withEdgeLeaf` (Guarded) | a decomposition whose composition is unknown becomes a split with the composition as an open leaf | the two-pager's research question |
+| `guardedChain`, `guardedChain_two` (Guarded, v0.12.0) | the n-ary guarded chain: the pass leaf and one escape leaf per edge; for two edges its leaves are `guardedComp`'s (after normalizing the empty guard prefix, by `propext`) | G6, n-ary |
+| `guardedComp_irredundant`, `guardedChain_irredundant` (Guarded, v0.12.0) | no child can be dropped: for each child, some instance has the other children holding and the root failing | irredundancy |
 
 ### Certified easier as types
 
@@ -128,6 +141,8 @@ implements all of them, and a negative-control suite tests them (`RUNNER.md`).
 | `State.commit_credit_record` (State) | a credited commit lowers the record in `DMLt` | local → frontier, for commits |
 | `State.easierSucc_wf` (State) | no infinite chain of certified-easier commits | the counted channel |
 | `State.no_infinite_credits` (State) | **no run earns infinitely many credits**, whatever mix of commits, refutations and learned conflicts it makes | circling impossible in mixed runs |
+| `State.selfMove`, `State.selfMove_commit`, `State.infinite_uncredited` (State, v0.12.0) | from a Clean state whose root is not refuted and whose frontier is nonempty, replacing a leaf by itself is accepted **without credit**, and this can repeat forever. Acceptance by `commit` only; admission by the runner is not covered | why a stall rule is needed |
+| `Arith.Formula.check_iff`, `Arith.Formula.mechCert` (Arith, v0.12.0) | rung 2 by reflection, for closed integer arithmetic only: `check` decides a closed formula exactly, and `mechCert` is its two-way certificate | rung 2 |
 
 ### Examples (`CRRGExamples/`), each checked by `rfl`, `decide`, or `#guard_msgs`
 
@@ -152,6 +167,7 @@ implements all of them, and a negative-control suite tests them (`RUNNER.md`).
 | 13 | crux family (`CruxFamily`, **synthetic**): one shared guarded edge, four members | only a member that discharges the guard and needs a bill can use the edge; one admission updates every member by the same rule; four admitted results in either order give the same states |
 | 14 | guard agreement (`FamilyAgreement`, **synthetic**) | `families/demo.json` and `CruxFamily.guard` have the same fields, kinds and constants, and give the same verdict on 17 samples |
 | 15 | guarded lane (`Lane`, **synthetic** instance) | "`b ≤ a` gives `b * b ≤ a * a`" without its guard `0 ≤ b`: no unguarded edge at `(1, -3)`, and the join is stuck on the escape leaf |
+| 16 | closure and the record (`ClosureRecord` in `Negatives.lean`, v0.12.0) | growing `[sized 0 1]` into two size-2 leaves is accepted without credit. Closing one is accepted without credit, although the local test passes: the record lags. Closing the last without a certificate is accepted without credit. With the certificate `DMLt [] record` it is **credited**, and the record becomes `[]` |
 | probes | seals (`probes/seal/`) | rename pair: different; inductive constructor `Claim 7` vs `Claim 8`: different |
 
 ## What this package does not do
@@ -161,4 +177,9 @@ See `STATUS.md` for the full list. In short:
 - restatement detection is definitional (D1, at admission) plus supplied implications (`learn`);
 - lineage, D1 admission and R1-on-definitions are runner checks in Lean meta, not kernel theorems;
 - owner pinning happens at `initial` and is signed outside Lean;
-- the gate runner that writes states is trusted, and its correctness is stated, not proved.
+- the gate runner that writes states is trusted, and its correctness is stated, not proved;
+- `CRRGCore/Gate.lean` is a **designed model**. Its steps build in by construction that the stored state changes only
+  by `commit`, `refute` or `learn`, never rolls back, and starts at `initial`. It proves nothing about the deployed
+  gate: not those properties, not checkpoint integrity, not crash durability, not the binding of seals to exact
+  types;
+- `infinite_uncredited` is about acceptance by `commit`, not about the runner's admission checks.

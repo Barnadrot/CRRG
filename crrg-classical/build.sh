@@ -3,6 +3,7 @@
 # Mathlib is pinned to c5ea00351c (lakefile.lean). crrg-core is built by path.
 set -eu
 cd "$(dirname "$0")"
+export ELAN_TOOLCHAIN="$(cat lean-toolchain)"   # pin the toolchain for every lean/lake call
 {
   echo "# crrg-classical build log"
   echo "# lean: $(lean --version)"

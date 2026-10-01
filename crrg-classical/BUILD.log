@@ -1,9 +1,9 @@
 # crrg-classical build log
 # lean: Lean (version 4.30.0, arm64-apple-darwin24.6.0, commit d024af099ca4bf2c86f649261ebf59565dc8c622, Release)
 ## lake build
-info: CRRGClassical/Axioms.lean:52:0: 'CRRGClassical.no_ingredient_refused' depends on axioms: [propext]
-info: CRRGClassical/Axioms.lean:53:0: 'CRRGClassical.admitted_cites_new' depends on axioms: [propext, Quot.sound]
-Build completed successfully (1015 jobs).
+info: CRRGClassical/Axioms.lean:80:0: 'CRRGClassical.RegionProgress.split_weight_conserved' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: CRRGClassical/Axioms.lean:81:0: 'CRRGClassical.RegionProgress.close_weight_decreases' depends on axioms: [propext, Classical.choice, Quot.sound]
+Build completed successfully (1019 jobs).
 exit: 0
 ## axioms (lake env lean CRRGClassical/Axioms.lean)
 'CRRGClassical.Step.wf'' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -48,3 +48,27 @@ exit: 0
 'CRRGClassical.recordAll_state' depends on axioms: [propext]
 'CRRGClassical.no_ingredient_refused' depends on axioms: [propext]
 'CRRGClassical.admitted_cites_new' depends on axioms: [propext, Quot.sound]
+'CRRGClassical.dm_add_cancel' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.dm_singleton_iff' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.dm_aligned_singleton_iff' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.dmCheck_sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.withComputedCert_credited_iff' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.dmlt_le_some' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.record_le_root' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.credited_le_root' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.top_root_credit' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.creditOf_top_iff' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.no_infinite_credits_stutter' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.dichotomy' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.faithful_newConflict_refuted' depends on axioms: [propext, Quot.sound]
+'CRRGClassical.lane_progress_unparks' depends on axioms: [propext, Quot.sound]
+'CRRGClassical.lane_projection_faithful' depends on axioms: [propext, Quot.sound]
+'CRRGClassical.gate_lane_dichotomy' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.RegionProgress.root_iff_open' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.RegionProgress.frontier_counterexample_refutes_root' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound]
+'CRRGClassical.RegionProgress.split_close_bound' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.RegionProgress.empty_root_zero_steps' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.RegionProgress.split_weight_conserved' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CRRGClassical.RegionProgress.close_weight_decreases' depends on axioms: [propext, Classical.choice, Quot.sound]

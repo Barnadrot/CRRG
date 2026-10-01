@@ -123,4 +123,145 @@ theorem Region.admit_subset (e : List (ℕ × ℕ)) (r : Finset ℕ) : Region.ad
 
 end Regions
 
+/-! ## Part 2, M3: records and credited frontiers stay below the initial label -/
+
+theorem dmlt_le_some {l' l : List Label} (h : DMLt l' l) :
+    ∀ x ∈ l', ∃ y ∈ l, x ≤ y := by
+  obtain ⟨X, Y, Z, _, hnew, hold, hYZ⟩ := dmlt_iff_isDM.mp h
+  intro x hx
+  have hx' : x ∈ X + Y := hnew ▸ (Multiset.mem_coe.mpr hx)
+  rcases Multiset.mem_add.mp hx' with hxX | hxY
+  · exact ⟨x, Multiset.mem_coe.mp (hold.symm ▸ Multiset.mem_add.mpr (.inl hxX)), le_rfl⟩
+  · obtain ⟨y, hy, hxy⟩ := hYZ x hxY
+    exact ⟨y, Multiset.mem_coe.mp (hold.symm ▸ Multiset.mem_add.mpr (.inr hy)), le_of_lt hxy⟩
+
+theorem run_record_mono_stutter (s : ℕ → State root)
+    (hs : ∀ i, State.Advance (s i) (s (i + 1)) ∨ s (i + 1) = s i)
+    (i j : ℕ) (hij : i ≤ j) :
+    (s j).record = (s i).record ∨ DMLt (s j).record (s i).record := by
+  induction j, hij using Nat.le_induction with
+  | base => exact .inl rfl
+  | succ j _ ih =>
+    have hstep : (s (j + 1)).record = (s j).record ∨
+        DMLt (s (j + 1)).record (s j).record := by
+      rcases hs j with h | h
+      · exact State.advance_record h
+      · exact .inl (congrArg State.record h)
+    rcases hstep with heq | hlt
+    · rwa [heq]
+    · right
+      rcases ih with heq | hlt'
+      · rwa [heq] at hlt
+      · exact Relation.TransGen.trans hlt hlt'
+
+theorem record_le_root (s : ℕ → State root)
+    (hs : ∀ i, State.Advance (s i) (s (i + 1)) ∨ s (i + 1) = s i)
+    {ℓ₀ : Label} (h0 : (s 0).record = [ℓ₀]) : ∀ i, ∀ x ∈ (s i).record, x ≤ ℓ₀ := by
+  intro i x hx
+  rcases run_record_mono_stutter s hs 0 i (Nat.zero_le _) with heq | hlt
+  · rw [heq, h0] at hx
+    have : x = ℓ₀ := by simpa using hx
+    subst x; exact le_rfl
+  · obtain ⟨y, hy, hxy⟩ := dmlt_le_some hlt x hx
+    rw [h0] at hy
+    have : y = ℓ₀ := by simpa using hy
+    subst y; exact hxy
+
+theorem credited_frontier_record {S S' : State root} (hc : State.Credited S S') :
+    S'.leafLabels = S'.record := by
+  obtain ⟨m, hm⟩ := hc
+  rw [State.commit_leafLabels S S' m _ hm, State.commit_record S S' m _ hm,
+    ← State.commit_tag S S' m _ hm]
+
+theorem credited_le_root (s : ℕ → State root)
+    (hs : ∀ i, State.Advance (s i) (s (i + 1)) ∨ s (i + 1) = s i)
+    {ℓ₀ : Label} (h0 : (s 0).record = [ℓ₀]) {i : ℕ}
+    (hc : State.Credited (s i) (s (i + 1))) :
+    ∀ x ∈ (s (i + 1)).leafLabels, x ≤ ℓ₀ := by
+  rw [credited_frontier_record hc]
+  exact record_le_root s hs h0 (i + 1)
+
+theorem dmlt_top_iff_nil (l : List Label) : DMLt l [.top] ↔ l = [] := by
+  rw [dmlt_iff_isDM]
+  change IsDershowitzMannaLT (l : Multiset Label) {Label.top} ↔ l = []
+  rw [dm_singleton_iff]
+  constructor
+  · intro h
+    cases l with
+    | nil => rfl
+    | cons a rest => exact (Label.not_lt_top a (h a (by simp))).elim
+  · rintro rfl; simp
+
+theorem dmlt_not_nil (l : List Label) : ¬ DMLt l [] := by
+  intro h
+  obtain ⟨X, Y, Z, hZ, _, heq, _⟩ := dmlt_iff_isDM.mp h
+  have hcard := congrArg Multiset.card heq
+  simp only [Multiset.coe_nil, Multiset.card_zero, Multiset.card_add] at hcard
+  exact hZ (Multiset.card_eq_zero.mp (by omega))
+
+theorem top_root_credit (s : ℕ → State root)
+    (hs : ∀ i, State.Advance (s i) (s (i + 1)) ∨ s (i + 1) = s i)
+    (h0 : (s 0).record = [.top]) {i : ℕ}
+    (hc : State.Credited (s i) (s (i + 1))) :
+    (s (i + 1)).leaves = [] ∧ root.claim ∧
+      ∀ j, i < j → ¬ State.Credited (s j) (s (j + 1)) := by
+  obtain ⟨m, hm⟩ := hc
+  have hdrop := State.commit_credit_record (s i) (s (i + 1)) m hm
+  have hbelow : DMLt (s (i + 1)).record [.top] := by
+    rcases run_record_mono_stutter s hs 0 i (Nat.zero_le _) with heq | hlt
+    · simpa [heq, h0] using hdrop
+    · simpa [h0] using Relation.TransGen.trans hdrop hlt
+  have hempty := (dmlt_top_iff_nil _).mp hbelow
+  have hlabels := (credited_frontier_record ⟨m, hm⟩).trans hempty
+  have hleaves : (s (i + 1)).leaves = [] := by simpa [State.leafLabels] using hlabels
+  refine ⟨hleaves, (s (i + 1)).closeRoot (by simp [hleaves]), ?_⟩
+  intro j hij ⟨mj, hmj⟩
+  have hrec : (s j).record = [] := by
+    rcases run_record_mono_stutter s hs (i + 1) j hij with heq | hlt
+    · exact heq.trans hempty
+    · exact (dmlt_not_nil _ (hempty ▸ hlt)).elim
+  have := State.commit_credit_record (s j) (s (j + 1)) mj hmj
+  rw [hrec] at this
+  exact dmlt_not_nil _ this
+
+theorem newLabels_nil_shape {S : State root} (m : Move S) (h : S.newLabels m = []) :
+    S.leaves.length = 1 ∧ m.children = [] := by
+  have hlen := congrArg List.length h
+  simp only [State.newLabels, replaceList, List.length_append, List.length_take,
+    List.length_map, List.length_drop, List.length_nil, State.length_leafLabels] at hlen
+  have hp := m.pos.isLt
+  have hmin : min m.pos.val S.leaves.length = m.pos.val := Nat.min_eq_left (Nat.le_of_lt hp)
+  rw [hmin] at hlen
+  refine ⟨by omega, ?_⟩
+  have : m.children.length = 0 := by omega
+  simpa using this
+
+theorem creditOf_top_iff {S : State root} (m : Move S) (h : S.record = [.top]) :
+    S.creditOf m = .certifiedEasier ↔
+      S.leaves.length = 1 ∧ m.children = [] ∧
+        (S.leafLabels = [.top] ∨ m.recordCert.isSome) := by
+  constructor
+  · intro hc
+    have hd := State.creditOf_sound S m hc
+    rw [h] at hd
+    obtain ⟨hlen, hchildren⟩ := newLabels_nil_shape m ((dmlt_top_iff_nil _).mp hd)
+    refine ⟨hlen, hchildren, ?_⟩
+    unfold State.creditOf at hc
+    split at hc
+    · rename_i hb
+      rw [Bool.or_eq_true, Bool.and_eq_true] at hb
+      rcases hb with ⟨_, heq⟩ | hcert
+      · exact .inl ((of_decide_eq_true heq).trans h)
+      · exact .inr hcert
+    · cases hc
+  · rintro ⟨_, hchildren, heq | hcert⟩
+    · unfold State.creditOf
+      apply if_pos
+      rw [Bool.or_eq_true, Bool.and_eq_true]
+      exact .inl ⟨by simp [State.localEasier, hchildren], decide_eq_true (heq.trans h.symm)⟩
+    · unfold State.creditOf
+      apply if_pos
+      rw [Bool.or_eq_true]
+      exact .inr hcert
+
 end CRRGClassical

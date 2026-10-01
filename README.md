@@ -14,7 +14,7 @@ CRRG is **not** a scalar reward function. A green integrity check is not mathema
 
 ## Status
 
-Current version: **v0.11.1**, which corrects v0.11.0 after an independent audit (see `CHANGELOG.md`, CHG-46). v0.11.0 added the closed core (`crrg-core/`) and the classical library (`crrg-classical/`): 4,684 lines of Lean and 1,072 of Python. The v0.10 specification and its persistence layer (`CRRG/`, `Spec.md`) are unchanged.
+Current version: **v0.12.0**. It proves in Lean several results that v0.11 left as arguments on paper, and adds a designed model of the gate (see `CHANGELOG.md`, CHG-47); the new results are 1,454 lines of Lean, additions only. v0.11.1 corrected v0.11.0 after an independent audit (CHG-46). v0.11.0 added the closed core (`crrg-core/`) and the classical library (`crrg-classical/`): 4,684 lines of Lean and 1,072 of Python. The v0.10 specification and its persistence layer (`CRRG/`, `Spec.md`) are unchanged.
 
 The persistence layer is implemented and has been exercised in a live Reed–Solomon autoresearch deployment in `Barnadrot/proximity-research`. That deployment has produced certified refinements and closures, caught live semantic drift, deduplicated identical obligations, separated `NO_TRANSITION` from admitted graph movement, and exercised first- and second-order stall handling.
 
@@ -23,7 +23,7 @@ These observations validate the mechanism’s operation. They do **not** yet est
 See [`Spec.md`](Spec.md) for the normative design and [`CHANGELOG.md`](CHANGELOG.md) for the audit trail and implementation history.
 
 
-## v0.11: the closed core and the classical library
+## v0.11 and v0.12: the closed core and the classical library
 
 Two Lean packages that re-build CRRG's certified research state from the ground up, closing the gaps of v0.10
 (the root of this repository). CRRG's rule stays the same: an agent **proposes** a typed transition, a verifier
@@ -31,15 +31,19 @@ Two Lean packages that re-build CRRG's certified research state from the ground 
 
 | Package | What it is | Trust base |
 |---|---|---|
-| [`crrg-core/`](crrg-core/) | The certified core: state, typed transitions and their commit, frontier invariant, guarded composition, the "certified easier" ladder with record-low credit, sealing, and a runner that admits submissions | Lean core only; no Mathlib, no `Classical.choice` in the headline theorems |
-| [`crrg-classical/`](crrg-classical/) | The same machinery on Mathlib objects: the Dershowitz–Manna bridge, "no run earns infinitely many credits", the stall rule, the evidence ledger, crux families, and the list-bound/class-cap converse | Mathlib (pinned `c5ea00351c`) and Lean's standard axioms |
+| [`crrg-core/`](crrg-core/) | The certified core: state, typed transitions and their commit, frontier invariant, guarded composition, the "certified easier" ladder with record-low credit, sealing, and a runner that admits submissions. Since v0.12.0 also: learned conflicts persist along runs, uncredited self-moves can repeat forever, n-ary guarded chains, reflection for closed integer arithmetic, and a designed gate model (not the deployed gate) | Lean core only; no Mathlib; no declaration of the certified library depends on `Classical.choice` (all of them checked by `CRRGExamples/CoreAxiomAudit.lean`) |
+| [`crrg-classical/`](crrg-classical/) | The same machinery on Mathlib objects: the Dershowitz–Manna bridge, "no run earns infinitely many credits", the stall rule, the evidence ledger, crux families, and the list-bound/class-cap converse. Since v0.12.0 also: a computed Dershowitz–Manna checker with proof-producing record certificates, bounds on credited labels, the stall dichotomy for faithfully recorded lane logs, and a finite region model | Mathlib (pinned `c5ea00351c`) and Lean's standard axioms |
 
-**What was verified.** Both packages were built from clean with `leanprover/lean4:v4.30.0`, with these results
-(logs in each package):
-- `crrg-core`: 37 headline declarations, none depending on `Classical.choice`, and no `sorry`. The runner suite
-  passes 42/42 (40 cases), and both seal probes produce different seals. The log is `crrg-core/BUILD.log`.
-- `crrg-classical`: 1015 build jobs. All 42 printed declarations use only `propext`, `Classical.choice` and
-  `Quot.sound`, and there is no `sorry`. The log is `crrg-classical/BUILD.log`.
+**What was verified.** For v0.12.0, both packages were built from clean with `leanprover/lean4:v4.30.0`, with
+these results (logs in each package):
+- `crrg-core`: 59 headline declarations, none depending on `Classical.choice`: 43 use `[propext, Quot.sound]`, 7 use
+  `[propext]`, and 9 use no axioms. A whole-library audit checks all 984 constants of the certified library
+  (`CRRGCore`, 7 modules, private and generated ones included): each uses only `propext` and `Quot.sound`. There is
+  no `sorry`. The runner suite passes 47/47 (45 cases), and both seal probes produce different seals. The log is
+  `crrg-core/BUILD.log`.
+- `crrg-classical`: 1019 build jobs. All 64 printed declarations use only `propext`, `Classical.choice` and
+  `Quot.sound` (53 use all three, 8 use `[propext, Quot.sound]`, 3 use `[propext]`), and there is no `sorry`. The log
+  is `crrg-classical/BUILD.log`.
 
 **Examples are synthetic.** The crux-family, lane and guard examples are made-up instances that exercise the
 mechanism. They model no particular problem.
@@ -52,6 +56,11 @@ kernel-checked, but the tree they import is not independently certified. They st
 - a refinement proof of the runner's commit loop;
 - a production seal (sha256 over `lean4export`);
 - detectors for propositional restatements.
+
+v0.12.0 proves refinement, finite credit, a sound attempt journal and fair extension for a *designed* model of the
+gate (`crrg-core/CRRGCore/Gate.lean`). That model is not the gate: it proves nothing about the deployed gate, the
+integrity of its checkpoints, or the binding of seals to exact types. An LRAT route to certified negatives was
+attempted for v0.12.0 and not obtained; no LRAT code is included.
 
 One known runner issue: in `runner/guard_fields.py`, an `expr` check whose variable is missing raises
 `NameError` instead of failing the field.

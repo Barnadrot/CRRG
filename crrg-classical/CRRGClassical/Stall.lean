@@ -1,4 +1,5 @@
 import CRRGClassical.State
+import CRRGCore.Gate
 
 /-!
 # CRRGClassical.Stall — a stall and exit rule per crux
@@ -117,5 +118,120 @@ theorem unparked_needs_conflicts {root : Goal} (s : ℕ → State root)
     | credited => exact absurd (ho i hoi) (hM i (le_of_max_le_right hi))⟩
   obtain ⟨t, ht, hnp⟩ := hopen T
   exact hnp (hT t ht)
+
+/-! ## Part 2, M5: stutters and faithfully typed lane logs -/
+
+theorem recordRun_of_stutter {root : Goal} (s : ℕ → State root)
+    (hs : ∀ i, State.Advance (s i) (s (i + 1)) ∨ s (i + 1) = s i) :
+    RecordRun (fun i => ((s i).record : Multiset Label)) := by
+  intro i
+  rcases hs i with hi | hi
+  · rcases State.advance_record hi with heq | hlt
+    · exact .inl (congrArg (fun l : List Label => (l : Multiset Label)) heq)
+    · exact .inr (dmlt_iff_isDM.mp hlt)
+  · exact .inl (congrArg (fun S : State root => (S.record : Multiset Label)) hi)
+
+theorem no_infinite_credits_stutter {root : Goal} (s : ℕ → State root)
+    (hs : ∀ i, State.Advance (s i) (s (i + 1)) ∨ s (i + 1) = s i) :
+    ¬ ∀ i, ∃ j, i ≤ j ∧ State.Credited (s j) (s (j + 1)) := by
+  intro h
+  apply no_infinite_credits _ (recordRun_of_stutter s hs)
+  intro i
+  obtain ⟨j, hij, m, hm⟩ := h i
+  exact ⟨j, hij, core_commit_classical _ _ m hm⟩
+
+/-- Each lane outcome refers to its actual run step; new conflicts are fresh keys. -/
+structure Faithful {root : Goal} (s : ℕ → State root) (π : ℕ → ℕ)
+    (o : ℕ → Outcome) : Prop where
+  credited : ∀ j, o j = .credited → State.Credited (s (π j)) (s (π j + 1))
+  newConflict : ∀ j, o j = .newConflict →
+    ∃ key ∈ (s (π j + 1)).conflicts, key ∉ (s (π j)).conflicts
+
+theorem dichotomy {root : Goal} (s : ℕ → State root)
+    (hs : ∀ i, State.Advance (s i) (s (i + 1)) ∨ s (i + 1) = s i)
+    (π : ℕ → ℕ) (hπ : StrictMono π) (o : ℕ → Outcome) (hf : Faithful s π o) (k : ℕ) :
+    (∃ T, ∀ t ≥ T, parked k (hist o t)) ∨
+      ∀ N, ∃ j ≥ N, ∃ key ∈ (s (π j + 1)).conflicts, key ∉ (s (π j)).conflicts := by
+  classical
+  by_cases hconf : ∀ N, ∃ j ≥ N, ∃ key ∈ (s (π j + 1)).conflicts,
+      key ∉ (s (π j)).conflicts
+  · exact .inr hconf
+  · left
+    obtain ⟨N, hN⟩ := not_forall.mp hconf
+    obtain ⟨M, hM⟩ := not_forall.mp (no_infinite_credits_stutter s hs)
+    have hle : ∀ n, n ≤ π n := by
+      intro n
+      induction n with
+      | zero => exact Nat.zero_le _
+      | succ n ih => exact (Nat.succ_le_succ ih).trans (hπ (Nat.lt_succ_self n))
+    apply eventually_parked o k
+    refine ⟨max N M, fun j hj => ?_⟩
+    cases ho : o j with
+    | dry => rfl
+    | newConflict => exact (hN ⟨j, le_of_max_le_left hj, hf.newConflict j ho⟩).elim
+    | credited =>
+      exact (hM ⟨π j, (le_of_max_le_right hj).trans (hle j), hf.credited j ho⟩).elim
+
+/-- Fresh conflict outcomes carry actual certified refutations in the new registry. -/
+theorem faithful_newConflict_refuted {root : Goal} {s : ℕ → State root}
+    {π : ℕ → ℕ} {o : ℕ → Outcome} (hf : Faithful s π o) {j : ℕ}
+    (ho : o j = .newConflict) :
+    ∃ key ∈ (s (π j + 1)).conflicts,
+      key ∉ (s (π j)).conflicts ∧ ¬ holds (s (π j + 1)).reg key := by
+  obtain ⟨key, hk, hnew⟩ := hf.newConflict j ho
+  exact ⟨key, hk, hnew, (s (π j + 1)).conflicts_sound key hk⟩
+
+/-- Keys fresh at strictly later lane steps cannot repeat an earlier learned key. -/
+theorem fresh_keys_distinct {root : Goal} (s : ℕ → State root)
+    (hs : ∀ i, State.Advance (s i) (s (i + 1)) ∨ s (i + 1) = s i)
+    (π : ℕ → ℕ) (hπ : StrictMono π) {i j a b : ℕ} (hij : i < j)
+    (ha : a ∈ (s (π i + 1)).conflicts) (hb : b ∉ (s (π j)).conflicts) : a ≠ b := by
+  intro heq
+  subst b
+  exact hb (State.run_conflicts_mono s hs (hπ hij) a ha)
+
+/-- Progress at an actual lane attempt resets parking only at positive thresholds. -/
+theorem lane_progress_unparks (o : ℕ → Outcome) (j k : ℕ) (hk : 1 ≤ k)
+    (ho : (o j).progress = true) : ¬ parked k (hist o (j + 1)) :=
+  progress_unparks hk (o j) ho (hist o j)
+
+/-! ## Part 3, L-06: the designed gate's chronological lane projection -/
+
+def gateOutcome : CRRGCore.AttemptOutcome → Outcome
+  | .credited => .credited
+  | .newConflict => .newConflict
+  | .dry => .dry
+
+/-- An infinite chronological, exhaustive projection of the actual appended lane entries. -/
+structure LaneProjection {root : Goal} {P W : Type} (c : ℕ → Gate root P W)
+    (lane : ℕ) (π : ℕ → ℕ) (entry : ℕ → Attempt) : Prop where
+  increasing : StrictMono π
+  lane_eq : ∀ j, (entry j).lane = lane
+  logged : ∀ j, (c (π j + 1)).journal = (c (π j)).journal ++ [entry j]
+  exhaustive : ∀ t e, (c (t + 1)).journal = (c t).journal ++ [e] → e.lane = lane →
+    ∃ j, π j = t
+
+theorem lane_projection_faithful {root : Goal} {P W : Type} {run}
+    (c : ℕ → Gate root P W) (hc : ∀ n, Gate.Step run (c n) (c (n + 1)))
+    (lane : ℕ) (π : ℕ → ℕ) (entry : ℕ → Attempt) (hp : LaneProjection c lane π entry) :
+    Faithful (fun t => (c t).b) π (fun j => gateOutcome (entry j).outcome) := by
+  constructor
+  · intro j hj
+    have hs := Gate.appended_event_sound (hc (π j)) (hp.logged j)
+    cases he : (entry j).outcome <;> simp_all [gateOutcome, Gate.EventSound]
+  · intro j hj
+    have hs := Gate.appended_event_sound (hc (π j)) (hp.logged j)
+    cases he : (entry j).outcome <;> simp_all [gateOutcome, Gate.EventSound]
+
+/-- Proposition A.6 for the designed model and each infinite actual lane projection. -/
+theorem gate_lane_dichotomy {root : Goal} {P W : Type} {run}
+    (c : ℕ → Gate root P W) (hc : ∀ n, Gate.Step run (c n) (c (n + 1)))
+    (lane : ℕ) (π : ℕ → ℕ) (entry : ℕ → Attempt) (hp : LaneProjection c lane π entry) (k : ℕ) :
+    (∃ T, ∀ t ≥ T, parked k (hist (fun j => gateOutcome (entry j).outcome) t)) ∨
+      ∀ N, ∃ j ≥ N, ∃ key ∈ (c (π j + 1)).b.conflicts, key ∉ (c (π j)).b.conflicts := by
+  apply dichotomy (fun t => (c t).b) _ π hp.increasing _
+    (lane_projection_faithful c hc lane π entry hp) k
+  intro n
+  exact (Gate.step_refines (hc n)).symm
 
 end CRRGClassical

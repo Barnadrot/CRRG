@@ -17,6 +17,16 @@ A faithful CRRG should be a classical Lean proof, with Mathlib trusted. This pac
 | `DMLt.wf'` | `DMLt` well-founded from `Multiset.wellFounded_isDershowitzMannaLT` | proved |
 | `Credited`, `RecordRun`, `no_infinite_credits` | the record-low rule and "no run earns infinitely many credits", on multisets over any well-founded preorder | proved |
 | `core_credit_classical`, `core_commit_classical`, `core_no_infinite_credits_classical` | the two cores certify the same moves, and the core's `no_infinite_credits` follows from the classical one | proved |
+| `dm_cons_cancel`, `dm_add_cancel`, `dm_singleton_iff`, `dm_aligned_singleton_iff` (v0.12.0) | cancelling a common multiset preserves the Dershowitz–Manna order in both directions; a multiset is below a singleton iff each of its elements is | proved |
+
+**`CRRGClassical/DMCheck.lean`: a computed checker (v0.12.0).**
+
+| Declaration | Statement | Label |
+|---|---|---|
+| `dm_disjoint_iff`, `dm_residual_iff` | the DM order after cancelling the common part: every added label lies below some removed one, and something is removed | proved |
+| `dmCheck`, **`dmCheck_sound_complete`** | a computable checker, exact for the list order: `dmCheck new record = true ↔ DMLt new record` | proved |
+| `dmCertificate`, `dmCertificate_isSome` | a proof-producing certificate, present exactly when the order holds | proved |
+| `withComputedCert`, **`withComputedCert_credited_iff`** | a move carrying the computed certificate is credited exactly when its new labels are DM-below the record. This is about the credit tag: `commit`'s other checks still apply, and the core runner does not call it | proved |
 
 **`CRRGClassical/State.lean`: the credit machinery over multisets.** The core's `State` is kept; the record
 and the new frontier are read as multisets through the bridge.
@@ -28,6 +38,7 @@ and the new frontier are read as multisets through the bridge.
 | `creditOf_sound_classical`, `commit_credit_record_classical` | the core's credit theorems over multisets | proved |
 | `easierSucc_wf_classical` | `InvImage.wf` of `wellFounded_isDershowitzMannaLT` | proved |
 | `recordRun_of_advance`, `no_infinite_credits_state` | core runs are a `RecordRun`; the classical `no_infinite_credits` gives the core's | proved |
+| `dmlt_le_some`, `record_le_root`, `credited_le_root`, `top_root_credit`, `creditOf_top_iff` (v0.12.0) | credited labels stay at or below the root's label along every run; with an unmeasured root, the first credit closes the root and is the last | proved |
 | `Region.admit`, **`Region.admit_comm`**, `Region.admit_subset` | crux-family regions as `Finset` intervals; admission order-independence **in general** (`sdiff_sdiff_comm`) | proved |
 
 **The other modules.**
@@ -38,6 +49,9 @@ and the new frontier are read as multisets through the bridge.
 | `Family.lean` | `demo_orders_agree`, `demo_any_order`, `demo_x_after_two`, `demo_x_closed`, `demo_y_after`: the order results and the region arithmetic on crrg-core's **synthetic** crux family | proved (synthetic example) |
 | `Route.lean` | `CRRGClassical.CertRoute.closes`: a classical route certificate; `commit_transition`, `allClosed_iff` | proved |
 | `Stall.lean` | a stall and exit rule per crux: parking means the last `k` contracts were dry (`parked_last_dry`); progress unparks (`progress_unparks`); finitely many progress steps park (`eventually_parked`); a crux that never parks must keep producing outcomes labelled `newConflict` (`unparked_needs_conflicts`), compatible with `no_infinite_credits`. That a label marks a real new conflict is an assumption on the outcome log, not part of the theorem (v0.11.1) | proved |
+| `Stall.lean` (v0.12.0) | `Faithful`, `no_infinite_credits_stutter`, `dichotomy`: for runs with steps where nothing changes and a strictly increasing lane embedding, a lane whose outcomes are recorded faithfully either parks or keeps learning genuinely new conflict keys; the fresh keys are part of the conclusion, given `Faithful` (content for `k ≥ 1`). Also `faithful_newConflict_refuted`, `fresh_keys_distinct`, `lane_progress_unparks` (`k ≥ 1`) | proved |
+| `Stall.lean` (v0.12.0) | `LaneProjection`, `lane_projection_faithful`, `gate_lane_dichotomy`: in crrg-core's **designed** gate model, each lane's journal entries, enumerated in order, form a faithful outcome log, so the dichotomy holds for every lane of the model. A result about the model, not about any deployed gate | proved (model) |
+| `RegionProgress.lean` (v0.12.0) | a finite region model: `root_iff_open`, `frontier_counterexample_refutes_root`, `split_close_bound` (at most 2\|R₀\| − 1 counted splits and closes), `empty_root_zero_steps`, `split_weight_conserved`, `close_weight_decreases`. The ambient type needs only decidable equality. A separate model: it is not connected to `CRRGCore.State`, and nothing transfers to sufficient frontiers | proved |
 | `Ledger.lean` | an evidence ledger for non-move results: recording never changes the frontier or the credit (`record_frontier_credit`, `recordAll_state`); after a refutation, a re-priced proposal must cite a newer ledger entry (`no_ingredient_refused`, `admitted_cites_new`) | proved |
 | `Converse.lean` | `classCap_iff_listBound`: for a linear code given by a surjective syndrome map, a per-syndrome class cap and a list bound of the same size are equivalent (`card_listAt_eq`, via `c ↦ y − c`) | proved |
 

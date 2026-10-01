@@ -3,6 +3,23 @@
 What the package proves, what the runner tests, and what stays open. The review items (1–7) are those of
 the design review of the first build; the gaps (G1–G14) are those of CRRG v0.10.
 
+**v0.12.0 (2026-09-30).** Proofs in Lean of results that v0.11 left as arguments on paper, and a designed model of
+the gate. Every change is an addition: no existing definition or theorem statement changed, and the v0.11.1 headline
+axiom report prints as before. The work was specified by a GPT-6.1 Sol research seat and proved by a GPT-6 Astra seat;
+a Claude (Opus 5.5) review checked every new statement for faithfulness and every hypothesis for satisfiability.
+- Learned conflicts persist along runs, steps where nothing changes included (`State.Clean`, `run_clean`,
+  `run_conflicts_mono`, `run_no_readmission`, `run_conflict_refuted`).
+- A self-move is accepted without credit and can repeat forever (`selfMove_commit`, `infinite_uncredited`; acceptance by
+  `commit` only).
+- The n-ary guarded chain, and irredundancy of guarded composition (`guardedChain`, `guardedChain_irredundant`,
+  `guardedComp_irredundant`).
+- Reflection for closed integer arithmetic (`Arith.lean`).
+- A **designed** gate model (`Gate.lean`): refinement to runs of the certified state, finite credit, a sound attempt
+  journal and fair extension. It is a model, not the gate.
+- Example 16 (`ClosureRecord`): closure against a lagging record.
+- A whole-library axiom audit (`CRRGExamples/CoreAxiomAudit.lean`): all 984 constants of the `CRRGCore` modules use only
+  `propext` and `Quot.sound`.
+
 **v0.11.1 (2026-09-29).** Corrections after an independent audit (Codex GPT-6 Astra, read-only). It found the core's
 mathematics sound: no false derivation, no hidden axiom, no `sorry`. It found overstated claims and two defects:
 - R1's agreement check discarded a lemma's hypotheses and accepted one-instance lemmas. It is now tightened, with four
@@ -18,15 +35,17 @@ mathematics sound: no false derivation, no hidden axiom, no `sorry`. It found ov
 
 `./build.sh`, with Lean v4.30.0, from clean:
 - `CRRGCore`, `CRRGTools` and `CRRGExamples` all build (exit 0);
-- 37 headline declarations have no `Classical.choice`, using only `propext` and `Quot.sound`, and 9 use no
-  axioms at all;
+- 59 headline declarations have no `Classical.choice`: 43 use `propext` and `Quot.sound`, 7 use `propext` only,
+  and 9 use no axioms at all;
+- the whole-library axiom audit passes: all 984 constants of the `CRRGCore` modules (7 modules, private and generated
+  constants included) use only `propext` and `Quot.sound`;
 - there is no `sorry` in the core;
 - the core does not import `Lean`;
 - both seal probe pairs differ;
 - the runner suite gives 47/47 runs as expected (45 cases, including 10 guard-fields cases on a synthetic
-  family and 7 R1 cases, plus the two forgeries rerun with the lint bypassed). Run it with the v4.30.0 toolchain
-  first on `PATH`: the runner calls `lean` from a temporary directory, where elan's default toolchain may differ.
-  (v0.11.1, rebuilt from clean on the Lean machine, 2026-09-29.)
+  family and 7 R1 cases, plus the two forgeries rerun with the lint bypassed). The runner calls `lean` from a
+  temporary directory, so `build.sh` sets `ELAN_TOOLCHAIN` from `lean-toolchain` (since v0.12.0).
+  (v0.12.0, rebuilt from clean on the Lean machine, 2026-09-30.)
 
 See `BUILD.log` and `runner/TESTS.log`.
 
@@ -61,12 +80,12 @@ The runner checks are **executable and tested**, not just argued (`RUNNER.md`).
 
 | Gap | Now | How | What still leaks, if anything |
 |---|---|---|---|
-| G1 commit step | **closed as a runner obligation (tested), not by a Lean theorem** | private `State` constructor; `commit` is the only producer from a move; `commit_transition`; `#crrg_check_lineage`; submissions must be meta-free | the kernel does not enforce `private`, so lineage in the presence of metaprogramming rests on the audit and on the meta-free rule, both run by the gate. The runner's own loop has no Abadi–Lamport refinement proof |
+| G1 commit step | **closed as a runner obligation (tested), not by a Lean theorem** | private `State` constructor; `commit` is the only producer from a move; `commit_transition`; `#crrg_check_lineage`; submissions must be meta-free | the kernel does not enforce `private`, so lineage in the presence of metaprogramming rests on the audit and on the meta-free rule, both run by the gate. The runner's own loop has no Abadi–Lamport refinement proof; a designed gate model has one (`Gate.refines`, v0.12.0), which says nothing about the code |
 | G2 seal by kernel term | **partly closed** | `#crrg_seal` fingerprints complete declarations over the non-core closure, including constructors | a 64-bit hash, not cryptographic; name-sensitive by policy. Production: sha256 over `lean4export` in the signed runner |
 | G3 seal record | **closed for soundness** | registry keys are indices assigned by `commit`; no hash occurs in any theorem | seals remain an out-of-kernel identity for deduplication across routes |
 | G4 seal coverage | **closed by tooling** | the closure (a `CRRGTools` metaprogram, not a kernel theorem) follows every non-core constant, including constructors and the inductive block | `Init`/`Lean`/`Std` are pinned by the toolchain, not hashed |
-| G5 negatives and backtracking | **closed** | `refute`, `learn`, `backtrackTarget_ok`, `commit_no_conflict`, `commit_rootRefuted` | a propositional restatement under a new key is blocked once a detector supplies the implication (`learn`). D1 runs at admission (`#crrg_admit`) |
-| G6 guard composition | **closed** | `guardedComp`, `guardedComp_escapes` | binary, like ArkLib; n-ary by iteration |
+| G5 negatives and backtracking | **closed** | `refute`, `learn`, `backtrackTarget_ok`, `commit_no_conflict`, `commit_rootRefuted`; along runs (v0.12.0): `run_conflicts_mono`, `run_clean`, `run_no_readmission`, `run_conflict_refuted` | a propositional restatement under a new key is blocked once a detector supplies the implication (`learn`). D1 runs at admission (`#crrg_admit`) |
+| G6 guard composition | **closed** | `guardedComp`, `guardedComp_escapes`; n-ary `guardedChain` with coverage and irredundancy (v0.12.0), `guardedComp` being its two-edge case | — |
 | G7 True-valued links | **closed** | `CertRoute` makes the root `Capstone d` by type | `CertRoute` takes the caller's `Capstone`; no seal comparison with the frozen statement is implemented yet (G2) |
 | G8 outcome classification | **closed** | `commit : … → Except Reject (State × Tag)`, computed | the runner reads the result by `#eval` (compiled evaluation, trusted) |
 | G9 unchecked metadata | **closed** | outcomes carry proofs; no free-text hash fields | — |
@@ -92,7 +111,7 @@ The runner checks are **executable and tested**, not just argued (`RUNNER.md`).
 | Rung 3 with owner-pinned measure; Label order WF | done (`LabelOK`, `Label.lt_wf`) |
 | The production lemma: local decrease gives a frontier multiset decrease | done, without Mathlib (`Step.wf`, `PermStep.wf`, `DMLt.wf`, `creditOf_sound`, `commit_credit_record`) |
 | Otherwise tagged "not certified easier" | done (`creditOf` is computed) |
-| Examples | done (examples 1–12 plus 4b, 5b, 6b, 11b, the synthetic examples 13–15, and the seal probes) |
+| Examples | done (examples 1–12 plus 4b, 5b, 6b, 11b, the synthetic examples 13–15, example 16 (v0.12.0), and the seal probes) |
 
 ## Crux families and guarded lanes (synthetic examples)
 
@@ -128,6 +147,15 @@ All of it is **proved**, with axioms within `[propext, Classical.choice, Quot.so
   new-ingredient gate.
 - **The class-cap converse** (`Converse.lean`): `classCap_iff_listBound` for any linear code given by a
   surjective syndrome map.
+- **A computed Dershowitz–Manna checker** (`DMCheck.lean`, v0.12.0): `dmCheck_sound_complete : dmCheck new record =
+  true ↔ DMLt new record`, and `withComputedCert`, a proof-producing record certificate.
+- **Credited labels stay at or below the root's label** (`State.lean`, v0.12.0): `record_le_root`, `credited_le_root`;
+  with an unmeasured root, the first credit closes the root and is the last (`top_root_credit`, `creditOf_top_iff`).
+- **Stalls with faithful lane logs** (`Stall.lean`, v0.12.0): `no_infinite_credits_stutter`, and `dichotomy`: a lane
+  whose outcomes are recorded faithfully either parks or keeps learning genuinely new conflicts (content for `k ≥ 1`).
+  In the gate model, each lane's entries form such a log (`gate_lane_dichotomy`, for the model only).
+- **A finite region model** (`RegionProgress.lean`, v0.12.0): the root holds iff every open region holds; at most
+  2|R₀| − 1 splits and closes; a separate model, not connected to the certified state.
 
 ## Honest limits
 
@@ -149,12 +177,22 @@ All of it is **proved**, with axioms within `[propext, Classical.choice, Quot.so
 5. **Faithfulness and strategic value stay judgement** (CRRG Spec §10).
 6. **The examples are toy stand-ins.** Instantiating `Capstone` with a real frozen target statement needs a
    downstream adapter (Mathlib side).
+7. **The gate model is a design** (v0.12.0). Its steps build in that the stored state changes only by `commit`,
+   `refute` or `learn`, never rolls back, and starts at `initial`. The stall dichotomy is proved for any lane of the
+   model given its chronological enumeration; that a deployed log is faithfully recorded is not checked.
+8. **Admission by the runner is not mechanized for self-moves.** `infinite_uncredited` covers acceptance by `commit`
+   only; that the runner would also admit such moves stays an argument about tested code.
 
 ## Next steps (not done)
 
 - An adapter package instantiating `CertRoute` with a real frozen target statement (Mathlib side).
 - The seal as sha256 over `lean4export`, in the signed gate runner.
-- An Abadi–Lamport refinement proof of the runner and gate loop (the runner itself is done: `RUNNER.md`).
+- A refinement proof for the running gate and runner loop, for its code or checked per run by journal replay. The
+  designed model is done (`Gate.lean`, v0.12.0); the runner itself is done (`RUNNER.md`).
+- An LRAT route to certified negatives: tried for v0.12.0 and not obtained (checking even a two-clause certificate by
+  kernel reduction hit Lean's recursion limit; the default `bv_decide` path needs a native axiom). Lean's LRAT soundness
+  theorem uses `Classical.choice`, so such a route would belong in crrg-classical.
+- A proof-cost interface for "essential progress": not started.
 - Detectors for propositional restatements that feed `State.learn` (outside the runner).
 - Open design items, none implemented:
   1. the stall rule needs a `narrowed` outcome, counted as progress;
